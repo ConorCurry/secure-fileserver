@@ -175,7 +175,33 @@ public class GroupThread extends Thread
 				}
 				else if(message.getMessage().equals("RUSERFROMGROUP")) //Client wants to remove user from a group
 				{
-				    /* TODO:  Write this handler */
+				    if(message.getObjContents().size() < 3) //three objects in this method 
+					{
+						response = new Envelope("FAIL");
+					}
+					else
+					{
+						response = new Envelope("FAIL");
+						
+						if(message.getObjContents().get(0) != null) //index 0 is the username wanted to add 
+						{
+							if(message.getObjContents().get(1) != null) //index 1 is the group name to be added
+							{
+								if(message.getObjContents().get(2) != null) // index 2 is the token from user requested
+								{
+									String username = (String)message.getObjContents().get(0); //Extract the username
+									String groupname = (String)message.getObjContents().get(1);
+									UserToken yourToken = (UserToken)message.getObjContents().get(2); //Extract the token
+								
+									if(deleteUserFromGroup(username, groupname, yourToken))
+									{
+										response = new Envelope("OK"); //Success
+									}
+								}
+							}
+						}
+					}
+					output.writeObject(response);
 				}
 				else if(message.getMessage().equals("DISCONNECT")) //Client wants to disconnect
 				{
@@ -388,6 +414,46 @@ public class GroupThread extends Thread
 					{
 						my_gs.userList.addGroup(user, group);
 						return true; //add successfully
+					}
+				}
+				else
+				{
+					return false; //this user is not the current user of group server
+				}
+			}
+			else
+			{
+				return false; //user is not the owner of group
+			}
+		}
+		else
+		{
+			return false; //user does not exist 
+		}
+	}
+
+	public boolean deleteUserFromGroup(String user, String group, UserToken yourtoken)
+	{
+		String requester = yourtoken.getSubject();
+
+		//does the user exist?
+		if(my_gs.userList.checkUser(requester))
+		{
+			//get the list of group owned by requester
+			ArrayList<String> temp = my_gs.userList.getUserOwnership(requester);
+			
+			if(temp.contains(group))
+			{
+				if(my_gs.userList.checkUser(user))
+				{
+					if(my_gs.userList.getUserGroups(user).contains(group))
+					{
+						my_gs.userlist.removeGroup(user, group);
+						return true; //remove this successfully
+					}
+					else
+					{
+						return false; //the user does not belong to that group
 					}
 				}
 				else
