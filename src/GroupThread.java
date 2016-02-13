@@ -360,26 +360,20 @@ public class GroupThread extends Thread
 				//requester is the owner of group
 
 				List<String> groupMember = new ArrayList<String>();
-				//if this group only has one member which is its owner
-				if(temp.get(group).size() == 1)
+				
+				//loop all the users, and check whether they belongs to this group
+				Enumeration e = my_gs.userList.getAllUsers();
+				while(e.hasMoreElements())
 				{
-					groupMember.add(requester);
-				}
-			    else
-			    {
-					//loop all the users, and check whether they belongs to this group
-					Enumeration e = my_gs.userList.getAllUsers();
-					while(e.hasMoreElements())
+					String temp_user = (String)e.nextElement();
+					//check whether this user has the group
+					if(my_gs.userList.getUserGroups(temp_user).contains(group))
 					{
-						String temp_user = e.nextElement();
-						//check whether this user has the group
-						if(my_gs.UserList.getUserGroups(temp_user).contains(group))
-						{
 							groupMember.add(temp_user);
-						}
 					}
 				}
-				return groupmember;
+				
+				return groupMember;
 			}
 			else
 			{
@@ -448,7 +442,7 @@ public class GroupThread extends Thread
 				{
 					if(my_gs.userList.getUserGroups(user).contains(group))
 					{
-						my_gs.userlist.removeGroup(user, group);
+						my_gs.userList.removeGroup(user, group);
 						return true; //remove this successfully
 					}
 					else
