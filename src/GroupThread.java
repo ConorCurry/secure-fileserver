@@ -63,9 +63,9 @@ public class GroupThread extends Thread
 					{
 						response = new Envelope("FAIL");
 						
-						if(message.getObjContents().get(0) != null)
+						if(message.getObjContents().get(0) != null) //index 0 is the username wanted to add 
 						{
-							if(message.getObjContents().get(1) != null)
+							if(message.getObjContents().get(1) != null) //index 1 is the token from user requested
 							{
 								String username = (String)message.getObjContents().get(0); //Extract the username
 								UserToken yourToken = (UserToken)message.getObjContents().get(1); //Extract the token
@@ -118,7 +118,30 @@ public class GroupThread extends Thread
 				}
 				else if(message.getMessage().equals("LMEMBERS")) //Client wants a list of members in a group
 				{
-				    /* TODO:  Write this handler */
+					response = new Envelope("FAIL");
+					response.addObject(null);
+					
+					if(!(message.getObjContents().size() < 2))
+					{
+							
+						if(message.getObjContents().get(0) != null) 
+						{
+							if(message.getObjContents().get(1) != null)
+							{
+								String groupname = (String)message.getObjContents().get(0); //Extract the group
+								UserToken yourToken = (UserToken)message.getObjContents().get(1); //Extract the token
+								
+								List<String> returnedMember = new List<String>(listMembers(groupname, yourToken));
+
+								if(returnedMember != null)
+								{
+									response = new Envelope("OK"); //Success
+									response.addObject(returnedMember);
+								}
+							}
+						}
+					}
+					output.writeObject(response);
 				}
 				else if(message.getMessage().equals("AUSERTOGROUP")) //Client wants to add user to a group
 				{
@@ -267,5 +290,53 @@ public class GroupThread extends Thread
 			return false; //requester does not exist
 		}
 	}
-	
+
+	/* Return a list of all users that are currently member of group*/
+	private List<String> listMembers(String group, UserToken yourtoken)
+	{
+		String requester = yourtoken.getSubject();
+
+		//does the user exist?
+		if(my_gs.userList.checkUser(requester))
+		{
+			//get the list of group owned by requester
+			ArrayList<String> temp = my_gs.userList.getUserOwnership(requester);
+			
+			if(temp.contains(group))
+			{
+				
+				//requester is the owner of group
+
+				List<String> groupMember = new ArrayList<String>();
+				//if this group only has one member which is its owner
+				if(temp.get(group).size() == 1)
+				{
+					groupMember.add(requester);
+				}
+			    else
+			    {
+					//loop all the users, and check whether they belongs to this group
+					Enumeration e = my_gs.userList.getAllUsers();
+					while(e.hasMoreElements())
+					{
+						String temp_user = e.nextElement();
+						//check whether this user has the group
+						if(my_gs.UserList.getUserGroups(temp_user).contains(group))
+						{
+							groupMember.add(temp_user);
+						}
+					}
+				}
+				return groupmember;
+			}
+			else
+			{
+				return null; //user does not own this group
+			}
+		}
+		else
+		{
+			return null; //requester does not exist 
+		}
+	}
 }

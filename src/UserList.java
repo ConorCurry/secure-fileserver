@@ -32,8 +32,9 @@ import java.util.*;
 				return false;
 			}
 		}
+		/* This method is used to get the groups that user belongs to */
 		
-		public synchronized ArrayList<String> getUserGroups(String username)
+		public synchronized ArrayList<String> getUserGroups(String username) 
 		{
 			return list.get(username).getGroups();
 		}
@@ -61,6 +62,11 @@ import java.util.*;
 		public synchronized void removeOwnership(String user, String groupname)
 		{
 			list.get(user).removeOwnership(groupname);
+		}
+
+		public synchronized Enumeration getAllUsers()
+		{
+			return list.keys();
 		}
 		
 	
@@ -122,5 +128,4 @@ import java.util.*;
 		}
 		
 	}
-	
 }	
