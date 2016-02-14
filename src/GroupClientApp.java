@@ -1,12 +1,14 @@
 import java.util.Scanner;
+import java.util.List;
+import java.util.ArrayList;
 
 public class GroupClientApp
 {
-	private GroupClient groupClient;
-	private Scanner input;
-	private int times = 1;
-	private UserToken token;
-	private int choice;
+	private static GroupClient groupClient;
+	private static Scanner input;
+	private static int times = 1;
+	private static UserToken token;
+	private static int choice;
 
 	public static void main(String[] args)
 	{
@@ -15,14 +17,21 @@ public class GroupClientApp
 	    input = new Scanner(System.in);
 		
 	    //connect to the group server 
-		int port;
-		if(args.length == 0
+		int port = -1;
+		if(args.length == 0)
 		{
-			port = GroupSever.SERVER_PORT;	
+			port = 8765; //default value	
 		}
 		else
 		{
-			port = Integer.ParseInt(args[0]);
+			try{
+				port = Integer.parseInt(args[0]);
+			}
+			catch(Exception e)
+			{
+				System.out.println("Unable to get vaid port number. Exiting.......");
+				System.exit(0);
+			}
 		}
 		groupClient.connect("ALPHA", port);
 		while(true)
@@ -33,20 +42,20 @@ public class GroupClientApp
 		}
 	}
 
-	public void printMainMenu()
+	public static void printMainMenu()
 	{
 		
 		//if the user just open the application. 
 		if(times == 1)
 		{
 			System.out.println("------------Welcome to CS1653 Group-Based File Sharing application------------\n");
-			System.out.println("Please enter your username:")
+			System.out.println("Please enter your username:");
 			String username = input.nextLine();
 			token = groupClient.getToken(username); //get a token for this user
 		}
 		else
 		{	
-			System,out.println("\t\t\tMain Menu: ");
+			System.out.println("\t\t\tMain Menu: ");
 			System.out.println("------------Please choose the number of what you want to do from the following options-------\n");
 			System.out.println("1. Create User");
 			System.out.println("2. Delete User");
@@ -55,6 +64,7 @@ public class GroupClientApp
 			System.out.println("5. Add User To Group");
 			System.out.println("6. Delete User From Group");
 			System.out.println("7. List members of a group");
+			System.out.println("8. Disconnect from the server and exit the application");
 			System.out.println("\nPlease enter your choice: ");
 
 			//check whether the choice is valid 
@@ -104,11 +114,15 @@ public class GroupClientApp
 				case 7:
 					optionSeven();
 					break;	
+
+				default:
+					optionEight();
+					break;
 			}
 		}
 	}
 
-	public void optionOne()
+	public  static void optionOne()
 	{
 		System.out.print("You have chose to create user. Press 1 to continue. Press other number to go back to main menu: ");
 		choice = input.nextInt();
@@ -123,12 +137,11 @@ public class GroupClientApp
 				System.out.println("Congratulations! You have created user " + createdUserName + "successfully!");
 			else
 				System.out.println("Sorry. You fail to create this user. Please try other options.");
-
-			System.out.println("Going back to main menu............................................\n");
 		}
+		System.out.println("Going back to main menu............................................\n");
 	}
 
-	public void optionTwo()
+	public static void optionTwo()
 	{
 		System.out.print("You have chose to delete user. Press 1 to continue. Press other number to go back to main menu: ");
 		choice = input.nextInt();
@@ -143,12 +156,11 @@ public class GroupClientApp
 				System.out.println("Congratulations! You have deleted user " + deletedUserName + "successfully!");
 			else
 				System.out.println("Sorry. You fail to delete this user. Please try other options.");
-
-			System.out.println("Going back to main menu............................................\n");
 		}
+		System.out.println("Going back to main menu............................................\n");
 	}
 
-	public void optionThree()
+	public static void optionThree()
 	{
 		System.out.print("You have chose to create a new group. Press 1 to continue. Press other number to go back to main menu: ");
 		choice = input.nextInt();
@@ -163,12 +175,11 @@ public class GroupClientApp
 				System.out.println("Congratulations! You have created the new group" + groupName + "successfully!");
 			else
 				System.out.println("Sorry. You fail to create this group. Please try other options.");
-
-			System.out.println("Going back to main menu............................................\n");
 		}
+		System.out.println("Going back to main menu............................................\n");
 	}
 
-	public void optionFour()
+	public static void optionFour()
 	{
 		System.out.print("You have chose to delete a new group. Press 1 to continue. Press other number to go back to main menu: ");
 		choice = input.nextInt();
@@ -183,12 +194,11 @@ public class GroupClientApp
 				System.out.println("Congratulations! You have deleted the new group" + groupName + "successfully!");
 			else
 				System.out.println("Sorry. You fail to delete this group. Please try other options.");
-
-			System.out.println("Going back to main menu............................................\n");
 		}
+		System.out.println("Going back to main menu............................................\n");
 	}
 
-	public void optionFive()
+	public static void optionFive()
 	{
 		System.out.print("You have chose to add a user to a group. Press 1 to continue. Press other number to go back to main menu: ");
 		choice = input.nextInt();
@@ -206,11 +216,11 @@ public class GroupClientApp
 			else
 				System.out.println("Sorry. You fail to add this user to the group. Please try other options.");
 
-			System.out.println("Going back to main menu............................................\n");
 		}
+		System.out.println("Going back to main menu............................................\n");
 	}
 
-	public void optionSix()
+	public static void optionSix()
 	{
 		System.out.print("You have chose to delete a user from a group. Press 1 to continue. Press other number to go back to main menu: ");
 		choice = input.nextInt();
@@ -228,13 +238,49 @@ public class GroupClientApp
 			else
 				System.out.println("Sorry. You fail to delete this user from the group. Please try other options.");
 
-			System.out.println("Going back to main menu............................................\n");
 		}
+		System.out.println("Going back to main menu............................................\n");
 	}
 
-	public void optionSeven()
+	public static void optionSeven()
 	{
+		System.out.print("You have chose to list all the members of the group. Press 1 to continue. Press other number to go back to main menu: ");
+		choice = input.nextInt();
+		input.nextLine();
+		if(choice == 1)
+		{
+			input.nextLine();
+			System.out.println();
+			System.out.print("Please Enter the group name which you would like to see all the members: ");
+			String groupName = input.nextLine();
+			List<String> members = new ArrayList<String>(groupClient.listMembers(groupName, token));
+			if(members != null)
+			{
+				System.out.println("Congratulations! You have fetched all the memers from the group" + groupName + "successfully!");
+				System.out.println("Start to list");
+				for(int i = 0; i < members.size(); i++)
+				{
+					System.out.println(""+ (i+1) + ". " + members.get(i));
+				}
+			}
+			else
+				System.out.println("Sorry. You fail to delete this user from the group. Please try other options.");
+		}
+		System.out.println("Going back to main menu............................................\n");
+	}
 
+	public static void optionEight()
+	{
+		System.out.print("You have chose to list all the members of the group. Press 1 to continue. Press other number to go back to main menu: ");
+		choice = input.nextInt();
+		input.nextLine();
+		if(choice == 1)
+		{
+			groupClient.disconnect();
+			System.out.println("You have disconnected from the server successfully! Exiting the application!");
+			System.exit(0);
+		}
+		System.out.println("Going back to main menu............................................\n");
 	}
 
 }
