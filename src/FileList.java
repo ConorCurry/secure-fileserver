@@ -39,10 +39,10 @@ import java.util.*;
 		return false;
 	}
 	
-	public synchronized ArrayList<String> fileAccess(ArrayList<String> groups) {
+	public synchronized ArrayList<String> fileAccess(List<String> groups) {
         ArrayList<String> filePermits = new ArrayList<String>();
 	    for(ShareFile file : list) {
-	        if(groups.contains(file.getGroup()) {
+	        if(groups.contains(file.getGroup())) {
 	            filePermits.add(file.getPath());
 	        }
 	    }

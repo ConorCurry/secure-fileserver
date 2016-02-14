@@ -3,6 +3,7 @@
 import java.lang.Thread;
 import java.net.Socket;
 import java.util.List;
+import java.util.ArrayList;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
@@ -47,7 +48,7 @@ public class FileThread extends Thread
 						}
 						else {
 						    UserToken yourToken = (UserToken)e.getObjContents().get(0);
-						    ArrayList<String> groupPermits = yourToken.getGroups();
+						    List<String> groupPermits = yourToken.getGroups();
 						    
 				            ArrayList<String> filenames = FileServer.fileList.fileAccess(groupPermits);
 				            

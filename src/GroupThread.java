@@ -437,8 +437,8 @@ public class GroupThread extends Thread
 				{
 				
 				    //loop through all users, removing the group from each one
-					for(Enumeration<String> e = my_gs.userList.getAllUsers(); e.hasMoreElements();) {
-					    my_gs.userList.removeGroup(e.nextElement(), groupname);
+                    for(String member: my_gs.groupList.getMembers(groupname)) {
+					    my_gs.userList.removeGroup(member, groupname);
 					}
 					
 					
