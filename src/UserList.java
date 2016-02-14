@@ -32,22 +32,26 @@ import java.util.*;
 				return false;
 			}
 		}
-		
-		public synchronized ArrayList<String> getUserGroups(String username)
+
+		/* This method is used to get the groups that user belongs to */
+		public synchronized ArrayList<String> getUserGroups(String username) 
 		{
 			return list.get(username).getGroups();
 		}
 		
+		/* get the groups owned by the user */
 		public synchronized ArrayList<String> getUserOwnership(String username)
 		{
 			return list.get(username).getOwnership();
 		}
 		
+		/* add a new group to a user */
 		public synchronized void addGroup(String user, String groupname)
 		{
 			list.get(user).addGroup(groupname);
 		}
 		
+		/* remove a group from a user */
 		public synchronized void removeGroup(String user, String groupname)
 		{
 			list.get(user).removeGroup(groupname);
@@ -62,8 +66,13 @@ import java.util.*;
 		{
 			list.get(user).removeOwnership(groupname);
 		}
-		
-	
+
+		public synchronized Enumeration getAllUsers()
+		{
+			return list.keys();
+		}
+
+
 	class User implements java.io.Serializable {
 
 		/**
@@ -122,5 +131,4 @@ import java.util.*;
 		}
 		
 	}
-	
 }	
