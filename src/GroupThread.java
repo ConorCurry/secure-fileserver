@@ -110,11 +110,57 @@ public class GroupThread extends Thread
 				}
 				else if(message.getMessage().equals("CGROUP")) //Client wants to create a group
 				{
-				    /* TODO:  Write this handler */
+				    if(message.getObjContents().size() < 2)
+					{
+						response = new Envelope("FAIL");
+					}
+					else
+					{
+						response = new Envelope("FAIL");
+						
+						if(message.getObjContents().get(0) != null) //index 0 is the username wanted to add 
+						{
+							if(message.getObjContents().get(1) != null) //index 1 is the token from user requested
+							{
+								String groupname = (String)message.getObjContents().get(0); //Extract the username
+								UserToken yourToken = (UserToken)message.getObjContents().get(1); //Extract the token
+								
+								if(createUser(groupname, yourToken))
+								{
+									response = new Envelope("OK"); //Success
+								}
+							}
+						}
+					}
+		
+					output.writeObject(response);
 				}
 				else if(message.getMessage().equals("DGROUP")) //Client wants to delete a group
 				{
-				    /* TODO:  Write this handler */
+				    if(message.getObjContents().size() < 2)
+					{
+						response = new Envelope("FAIL");
+					}
+					else
+					{
+						response = new Envelope("FAIL");
+						
+						if(message.getObjContents().get(0) != null)
+						{
+							if(message.getObjContents().get(1) != null)
+							{
+								String groupname = (String)message.getObjContents().get(0); //Extract the username
+								UserToken yourToken = (UserToken)message.getObjContents().get(1); //Extract the token
+								
+								if(deleteGroup(groupname, yourToken))
+								{
+									response = new Envelope("OK"); //Success
+								}
+							}
+						}
+					}
+					
+					output.writeObject(response);
 				}
 				else if(message.getMessage().equals("LMEMBERS")) //Client wants a list of members in a group
 				{
@@ -306,6 +352,7 @@ public class GroupThread extends Thread
 					}
 					
 					//If groups are owned, they must be deleted
+					//TODO: Fixes here to account for multiple owners
 					ArrayList<String> deleteOwnedGroup = new ArrayList<String>();
 					
 					//Make a hard copy of the user's ownership list
@@ -335,6 +382,84 @@ public class GroupThread extends Thread
 			else
 			{
 				return false; //requester is not an administer
+			}
+		}
+		else
+		{
+			return false; //requester does not exist
+		}
+	}
+	
+	private boolean createGroup(String groupname, UserToken yourToken)
+	{
+		String requester = yourToken.getSubject();
+		
+		//Check if requester exists
+		if(my_gs.userList.checkUser(requester))
+		{
+			//Does user already exist?
+			if(my_gs.groupList.checkGroup(groupname))
+			{
+				return false; //Group already exists
+			}
+			else
+			{
+				my_gs.groupList.addGroup(groupname);
+				my_gs.groupList.addOwner(requester, groupname);
+				my_gs.userList.addOwnership(requester, groupname);
+				return true;
+			}
+		}
+		else
+		{
+			return false; //requester does not exist
+		}
+	}
+	
+	//delete a group
+	private boolean deleteGroup(String groupname, UserToken yourToken)
+	{
+		String requester = yourToken.getSubject();
+		
+		//Does requester exist?
+		if(my_gs.userList.checkUser(requester))
+		{
+			ArrayList<String> temp = my_gs.groupList.getOwners(groupname);
+			//requester needs to be group owner
+			if(temp.contains(requester))
+			{
+				//Does group exist?
+				if(my_gs.groupList.checkGroup(groupname))
+				{
+				
+				    //loop through all users, removing the group from each one
+					for(Enumeration<String> e = my_gs.userList.getAllUsers(); e.hasMoreElements();) {
+					    e.nextElement().removeGroup(groupname);
+					}
+					
+					
+					//If groups are owned, remove references to ownership
+					ArrayList<String> deleteGroupOwnership = my_gs.groupList.getGroupOwners(groupname);
+				    
+					for(String username : deleteGroupOwnership)
+					{
+						my_gs.userList.removeOwnership(username, groupname);
+					}
+					
+					//Delete the group from the group list
+					my_gs.userList.deleteGroup(groupname);
+					
+					return true;	
+				}
+				else
+				{
+					return false; //Group does not exist
+					
+				}
+			}
+			else
+			{
+				return false; //requester is not an owner
 			}
 		}
 		else
