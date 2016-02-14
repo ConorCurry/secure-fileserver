@@ -10,10 +10,12 @@ import java.util.*;
 		private static final long serialVersionUID = 7614180777L;
 		private Hashtable<String, Group> list = new Hashtable<String, Group>();
 		
-		public synchronized void addGroup(String groupname)
+		public synchronized void addGroup(String groupname, String owner)
 		{
 			Group newGroup = new Group();
 			list.put(groupname, newGroup);
+			//group creation requires an owner
+			this.addOwner(owner, groupname);
 		}
 		
 		public synchronized void deleteGroup(String groupname)
@@ -57,7 +59,7 @@ import java.util.*;
 			
 			//if there are no more owners, delete the group
 			if(list.get(groupname).getOwners.isEmpty()) {
-			    deleteGroup(groupname);
+			    this.deleteGroup(groupname);
 			}
 		}
 		
