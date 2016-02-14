@@ -32,6 +32,14 @@ import java.util.*;
 				return false;
 			}
 		}
+		public synchronized void addMember(String user, String groupname) {
+		    list.get(groupname).addMember(user);
+		}
+		
+		public synchronized void removeMember(String user, String groupname) {
+		    //NOTE: this function does not have the privilege to remove an owner
+		    list.get(groupname).removeMember(user);
+		}
 		
 		public synchronized ArrayList<String> getGroupOwners(String groupname)
 		{
@@ -46,6 +54,11 @@ import java.util.*;
 		public synchronized void removeOwner(String user, String groupname)
 		{
 			list.get(groupname).removeOwnership(user);
+			
+			//if there are no more owners, delete the group
+			if(list.get(groupname).getOwners.isEmpty()) {
+			    deleteGroup(groupname);
+			}
 		}
 		
 		
@@ -57,10 +70,26 @@ import java.util.*;
 		 */
 		private static final long serialVersionUID = 6610772112L;
 		private ArrayList<String> owners;
+		private ArrayList<String> members;
 		
 		public Group()
 		{
 			owners = new ArrayList<String>();
+			members = new ArrayList<String>();
+		}
+		
+		public void addMember(String user) {
+		    if(!members.contains(user)) {
+		        members.add(user);
+		    }
+		}
+		
+		public void removeMember(String user) {
+		    if(!members.isEmpty()) {
+		        if(members.contains(user)) {
+		            members.remove(members.indexOf(user));
+		        }
+	        }
 		}
 		
 		public ArrayList<String> getOwners()
