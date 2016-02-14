@@ -36,7 +36,26 @@ public class FileThread extends Thread
 				// Handler to list files that this user is allowed to see
 				if(e.getMessage().equals("LFILES"))
 				{
-				    /* TODO: Write this handler */
+				    if(e.getObjContents().size() < 1)
+					{
+						response = new Envelope("FAIL-BADCONTENTS");
+					}
+					else
+					{
+						if(e.getObjContents().get(0) == null) {
+							response = new Envelope("FAIL-BADTOKEN");
+						}
+						else {
+						    UserToken yourToken = (UserToken)e.getObjContents().get(0);
+						    ArrayList<String> groupPermits = yourToken.getGroups();
+						    
+				            ArrayList<String> filenames = FileServer.fileList.fileAccess(groupPermits);
+				            
+				            response = new Envelope("OK");
+				            response.addObject(filenames);
+				        }
+			        }
+			        output.writeObject(response);
 				}
 				if(e.getMessage().equals("UPLOADF"))
 				{
