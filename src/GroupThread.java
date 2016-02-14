@@ -351,8 +351,7 @@ public class GroupThread extends Thread
 						my_gs.groupList.removeMember(username, deleteFromGroups.get(index));
 					}
 					
-					//If groups are owned, they must be deleted
-					//TODO: Fixes here to account for multiple owners
+					//If groups are owned BY ONLY THIS USER, they must be deleted
 					ArrayList<String> deleteOwnedGroup = new ArrayList<String>();
 					
 					//Make a hard copy of the user's ownership list
@@ -364,8 +363,11 @@ public class GroupThread extends Thread
 					//Delete owned groups
 					for(int index = 0; index < deleteOwnedGroup.size(); index++)
 					{
-						//Use the delete group method. Token must be created for this action
-						deleteGroup(deleteOwnedGroup.get(index), new Token(my_gs.name, username, deleteOwnedGroup));
+						//check if the user is the only owner of each group
+						if(my_gs.groupList.getGroupOwners(deleteOwnedGroup.get(index).size() == 1) {
+						    //Use the delete group method. Token must be created for this action
+						    deleteGroup(deleteOwnedGroup.get(index), new Token(my_gs.name, username, deleteOwnedGroup));
+					    }
 					}
 					
 					//Delete the user from the user list
@@ -404,8 +406,8 @@ public class GroupThread extends Thread
 			}
 			else
 			{
-				my_gs.groupList.addGroup(groupname);
-				my_gs.groupList.addOwner(requester, groupname);
+			    //this method handles group creation with an owner
+				my_gs.groupList.addGroup(groupname, requester);
 				my_gs.userList.addOwnership(requester, groupname);
 				return true;
 			}
