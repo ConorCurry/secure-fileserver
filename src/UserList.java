@@ -66,13 +66,13 @@ import java.util.*;
 		{
 			list.get(user).removeOwnership(groupname);
 		}
+        
+        public synchronized Enumeration<String> getAllUsers()
+        {
+            return list.keys();
+        }
 
-		public synchronized Enumeration getAllUsers()
-		{
-			return list.keys();
-		}
-
-
+	
 	class User implements java.io.Serializable {
 
 		/**

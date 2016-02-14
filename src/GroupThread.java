@@ -177,7 +177,7 @@ public class GroupThread extends Thread
 								String groupname = (String)message.getObjContents().get(0); //Extract the group
 								UserToken yourToken = (UserToken)message.getObjContents().get(1); //Extract the token
 								
-								List<String> returnedMember = new List<String>(listMembers(groupname, yourToken));
+								List<String> returnedMember = new ArrayList<String>(listMembers(groupname, yourToken));
 
 								if(returnedMember != null)
 								{
@@ -364,7 +364,7 @@ public class GroupThread extends Thread
 					for(int index = 0; index < deleteOwnedGroup.size(); index++)
 					{
 						//check if the user is the only owner of each group
-						if(my_gs.groupList.getGroupOwners(deleteOwnedGroup.get(index).size() == 1) {
+						if(my_gs.groupList.getGroupOwners(deleteOwnedGroup.get(index)).size() == 1) {
 						    //Use the delete group method. Token must be created for this action
 						    deleteGroup(deleteOwnedGroup.get(index), new Token(my_gs.name, username, deleteOwnedGroup));
 					    }
@@ -407,7 +407,9 @@ public class GroupThread extends Thread
 			else
 			{
 			    //this method handles group creation with an owner
+			    //also put the user as a group member
 				my_gs.groupList.addGroup(groupname, requester);
+				my_gs.groupList.addMember(requester, groupname);
 				my_gs.userList.addOwnership(requester, groupname);
 				return true;
 			}
@@ -426,7 +428,7 @@ public class GroupThread extends Thread
 		//Does requester exist?
 		if(my_gs.userList.checkUser(requester))
 		{
-			ArrayList<String> temp = my_gs.groupList.getOwners(groupname);
+			ArrayList<String> temp = my_gs.groupList.getGroupOwners(groupname);
 			//requester needs to be group owner
 			if(temp.contains(requester))
 			{
@@ -436,7 +438,7 @@ public class GroupThread extends Thread
 				
 				    //loop through all users, removing the group from each one
 					for(Enumeration<String> e = my_gs.userList.getAllUsers(); e.hasMoreElements();) {
-					    e.nextElement().removeGroup(groupname);
+					    my_gs.userList.removeGroup(e.nextElement(), groupname);
 					}
 					
 					
@@ -449,7 +451,7 @@ public class GroupThread extends Thread
 					}
 					
 					//Delete the group from the group list
-					my_gs.userList.deleteGroup(groupname);
+					my_gs.groupList.deleteGroup(groupname);
 					
 					return true;	
 				}
@@ -475,41 +477,14 @@ public class GroupThread extends Thread
 	{
 		String requester = yourtoken.getSubject();
 
-		//does the user exist?
-		if(my_gs.userList.checkUser(requester))
+		//Whether this user is the owner of this group?
+		if(my_gs.groupList.checkOwnership(requester, group))
 		{
-			//get the list of group owned by requester
-			ArrayList<String> temp = my_gs.userList.getUserOwnership(requester);
-			
-			if(temp.contains(group))
-			{
-				
-				//requester is the owner of group
-
-				List<String> groupMember = new ArrayList<String>();
-				
-				//loop all the users, and check whether they belongs to this group
-				Enumeration e = my_gs.userList.getAllUsers();
-				while(e.hasMoreElements())
-				{
-					String temp_user = (String)e.nextElement();
-					//check whether this user has the group
-					if(my_gs.userList.getUserGroups(temp_user).contains(group))
-					{
-							groupMember.add(temp_user);
-					}
-				}
-				
-				return groupMember;
-			}
-			else
-			{
-				return null; //user does not own this group
-			}
+            return my_gs.groupList.getMembers(group);
 		}
 		else
 		{
-			return null; //requester does not exist 
+			return null; //requester does own the group
 		}
 	}
 
@@ -534,6 +509,7 @@ public class GroupThread extends Thread
 					else
 					{
 						my_gs.userList.addGroup(user, group);
+                        my_gs.groupList.addMember(user, group);
 						return true; //add successfully
 					}
 				}
@@ -570,6 +546,7 @@ public class GroupThread extends Thread
 					if(my_gs.userList.getUserGroups(user).contains(group))
 					{
 						my_gs.userList.removeGroup(user, group);
+                        my_gs.groupList.removeMember(user, group);
 						return true; //remove this successfully
 					}
 					else

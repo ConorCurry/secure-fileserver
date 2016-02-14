@@ -34,6 +34,13 @@ import java.util.*;
 				return false;
 			}
 		}
+        
+
+		public synchronized List<String> getMembers(String groupname)
+		{
+			return list.get(groupname).getMember();
+		}
+		
 		public synchronized void addMember(String user, String groupname) {
 		    list.get(groupname).addMember(user);
 		}
@@ -55,13 +62,18 @@ import java.util.*;
 		
 		public synchronized void removeOwner(String user, String groupname)
 		{
-			list.get(groupname).removeOwnership(user);
+			list.get(groupname).removeOwner(user);
 			
 			//if there are no more owners, delete the group
-			if(list.get(groupname).getOwners.isEmpty()) {
+			if(list.get(groupname).getOwners().isEmpty()) {
 			    this.deleteGroup(groupname);
 			}
 		}
+        
+        public synchronized boolean checkOwnership(String user, String groupname)
+        {
+            return list.get(groupname).getOwners().contains(user);
+        }
 		
 		
 	
@@ -72,12 +84,17 @@ import java.util.*;
 		 */
 		private static final long serialVersionUID = 6610772112L;
 		private ArrayList<String> owners;
-		private ArrayList<String> members;
+		private List<String> members;
 		
 		public Group()
 		{
 			owners = new ArrayList<String>();
 			members = new ArrayList<String>();
+		}
+
+		public List<String> getMember()
+		{
+			return members;
 		}
 		
 		public void addMember(String user) {
@@ -96,7 +113,7 @@ import java.util.*;
 		
 		public ArrayList<String> getOwners()
 		{
-			return owner;
+			return owners;
 		}
 		
 		public void addOwner(String user)

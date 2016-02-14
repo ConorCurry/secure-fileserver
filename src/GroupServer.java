@@ -60,6 +60,7 @@ public class GroupServer extends Server {
 			groupList = new GroupList();
 			userList.addUser(username);
 			groupList.addGroup("ADMIN", username);
+            groupList.addMember(username, "ADMIN");
 			userList.addGroup(username, "ADMIN");
 			userList.addOwnership(username, "ADMIN");
 		}
