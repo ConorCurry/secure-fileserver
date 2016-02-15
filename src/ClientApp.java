@@ -34,7 +34,7 @@ public class ClientApp
             {
                 gs_port = 8765;
             }
-        } while(!groupClient.connect("localhost", gs_port));
+        } while(!groupClient.connect(gs_name, gs_port));
         
         do {
             System.out.print("Please enter your username to log in: ");
@@ -98,7 +98,11 @@ public class ClientApp
         System.out.println("5. Add User To Group");
         System.out.println("6. Delete User From Group");
         System.out.println("7. List members of a group");
-        System.out.println("8. Disconnect from the server and exit the application");
+        System.out.println("8. Modify fileserver connection");
+        System.out.println("9. Download file");
+        System.out.println("10. Upload file");
+        System.out.println("11. List all accessible files");
+        System.out.println("12. Disconnect from the server and exit the application");
         System.out.print("\nPlease enter your choice: ");
         
         //check whether the choice is valid
@@ -112,7 +116,7 @@ public class ClientApp
                 System.out.println("Sorry, Your choice is not valid, please enter a valid number.");
                 continue;
             }
-            if(choice < 1 || choice > 8)
+            if(choice < 1 || choice > 12)
             {
                 System.out.println("Sorry, Your choice is not valid, please enter a valid number.");
             }
@@ -120,6 +124,7 @@ public class ClientApp
         }
         input.nextLine();
         
+        //TODO: maybe break up into some submenus?
         switch(choice){
             case 1:
                 cuser();
@@ -147,6 +152,26 @@ public class ClientApp
                 
             case 7:
                 listAll();
+                break;
+                
+            case 8:
+                connectToFileserver();
+                break;
+                
+            case 9:
+                delFile();
+                break;
+            
+            case 10:
+                downloadFile();
+                break;
+                
+            case 11:
+                uploadFile();
+                break;
+                
+            case 12:
+                listFiles();
                 break;
                 
             default:
@@ -305,8 +330,4 @@ public class ClientApp
         System.out.println("Going back to main menu............................................\n");
     }
     
-    public static void printFileMenu()
-    {
-        
-    }
 }
