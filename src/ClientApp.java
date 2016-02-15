@@ -14,52 +14,36 @@ public class ClientApp
     {
         //create a new group client and file client
         groupClient = new GroupClient();
+        fileClient = new FileClient();
         input = new Scanner(System.in);
-        
+        System.out.println("------------Welcome to CS1653 Group-Based File Sharing application--------------------------------------\n");
+        System.out.print("Please Enter the port number for connecting to the group server, put 0 if you want to use default value: ");
+        int port_server = input.nextInt();
+        System.out.print("\nPlease Enter the port number for connecting to the file server, put 0 if you want to use default value: ");
+        int port_file = input.nextInt();
+        if(port_server == 0) port_server = 8765;
+        if(port_file == 0) port_file = 4321;
+
+        fileClient.connect("localhost", port_server);
+        groupClient.connect("localhost", port_file);
+
+        //get token user.
+        System.out.print("Please enter your username to log in:");
+        String username = input.nextLine();
+        token = groupClient.getToken(username); //get a token for this user
+        if(token == null)
+        {
+            System.out.println("Sorry, you do not belong to this group server. Exiting.........................");
+            groupClient.disconnect();
+            fileClient.disconnect();
+            input.close();
+            System.exit(0);
+        }
+            
+        System.out.printf("Welcome %s ! Now you are entering the main menu!"， username);
         while(true)
         {
-            //get token user.
-            System.out.println("------------Welcome to CS1653 Group-Based File Sharing application------------\n");
-            System.out.print("Please enter your username to log in:");
-            String username = input.nextLine();
-            token = groupClient.getToken(username); //get a token for this user
-            if(token == null)
-            {
-                System.out.println("Sorry, you do not belong to this group server. Exiting.........................");
-                groupClient.disconnect();
-                input.close();
-                System.exit(0);
-            }
-            
-            System.out.printf("Welcome %s ! Do you want to work on group server or file server? Press 1 for group server, 2 for file server");
-            choice = input.nextInt();
-            input.nextLine();
-            
-            groupClient.disconnect();
-            System.out.print("Please enter the port number to connect to your server, enter 0 for default: ");
-            int port = input.nextInt();
-            input.nextLine();
-            
-            if(choice == 1)
-            {
-                groupClient = new GroupClient();
-                if(port == 0)
-                {
-                    port = 8765;
-                }
-                groupClient.connect("localhost", port);
-                printGroupMenu();
-            }
-            else
-            {
-                if(port == 0)
-                {
-                    port = 4321;
-                }
-                fileClient.connect("localhost", port);
-                printFileMenu();
-                
-            }
+            printMenu();
         }
     }
     
@@ -75,21 +59,16 @@ public class ClientApp
         System.out.println("5. Add User To Group");
         System.out.println("6. Delete User From Group");
         System.out.println("7. List members of a group");
-        System.out.println("8. Disconnect from the server and exit the application");
+        System.out.println("8. List Files");
+        System.out.println("9. Upload File");
+        System.out.println("10. Download File");
+        System.out.println("11. Delete File");
+        System.out.println("12. Disconnect from the servers and exit the application");
         System.out.print("\nPlease enter your choice: ");
         
         //check whether the choice is valid
-        while(true){
-            try
-            {
-                choice = input.nextInt();
-            }
-            catch(Exception e)
-            {
-                System.out.println("Sorry, Your choice is not valid, please enter a valid number.");
-                continue;
-            }
-            if(choice < 1 && choice > 8)
+        while(checkValidInteger()){
+            if(choice < 1 && choice > 12)
             {
                 System.out.println("Sorry, Your choice is not valid, please enter a valid number.");
             }
@@ -126,8 +105,24 @@ public class ClientApp
                 optionSeven();
                 break;
                 
-            default:
+            case 8:
                 optionEight();
+                break;
+
+            case 9:
+                optionNine();
+                break;
+
+            case 10:
+                optionTen();
+                break;
+
+            case 11:
+                optionEleven();
+                break;
+
+            defa]:
+                optionTwelve();
                 break;
         }
     }
@@ -135,7 +130,9 @@ public class ClientApp
     public  static void optionOne()
     {
         System.out.print("You have chose to create user. Press 1 to continue. Press other number to go back to main menu: ");
-        choice = input.nextInt();
+        while(checkValidInteger()){
+
+        }
         input.nextLine();
         if(choice == 1)
         {
@@ -152,7 +149,8 @@ public class ClientApp
     public static void optionTwo()
     {
         System.out.print("You have chose to delete user. Press 1 to continue. Press other number to go back to main menu: ");
-        choice = input.nextInt();
+        
+        checkValidInteger;
         input.nextLine();
         if(choice == 1)
         {
@@ -169,7 +167,9 @@ public class ClientApp
     public static void optionThree()
     {
         System.out.print("You have chose to create a new group. Press 1 to continue. Press other number to go back to main menu: ");
-        choice = input.nextInt();
+        while(checkValidInteger()){
+
+        }
         input.nextLine();
         if(choice == 1)
         {
@@ -186,7 +186,9 @@ public class ClientApp
     public static void optionFour()
     {
         System.out.print("You have chose to delete a new group. Press 1 to continue. Press other number to go back to main menu: ");
-        choice = input.nextInt();
+        while(checkValidInteger()){
+
+        }
         input.nextLine();
         if(choice == 1)
         {
@@ -203,7 +205,9 @@ public class ClientApp
     public static void optionFive()
     {
         System.out.print("You have chose to add a user to a group. Press 1 to continue. Press other number to go back to main menu: ");
-        choice = input.nextInt();
+        while(checkValidInteger()){
+
+        }
         input.nextLine();
         if(choice == 1)
         {
@@ -223,7 +227,9 @@ public class ClientApp
     public static void optionSix()
     {
         System.out.print("You have chose to delete a user from a group. Press 1 to continue. Press other number to go back to main menu: ");
-        choice = input.nextInt();
+        while(checkValidInteger()){
+
+        }
         input.nextLine();
         if(choice == 1)
         {
@@ -244,7 +250,9 @@ public class ClientApp
     public static void optionSeven()
     {
         System.out.print("You have chose to list all the members of the group. Press 1 to continue. Press other number to go back to main menu: ");
-        choice = input.nextInt();
+        while(!checkValidInteger()){
+
+        }
         input.nextLine();
         if(choice == 1)
         {
@@ -269,21 +277,53 @@ public class ClientApp
     
     public static void optionEight()
     {
-        System.out.print("You have chose to list all the members of the group. Press 1 to continue. Press other number to go back to main menu: ");
-        choice = input.nextInt();
+        
+    }
+    
+    public static void optionNine()
+    {
+
+    }
+
+    public static void optionTen()
+    {
+
+    }
+
+    public static void optionEleven()
+    {
+
+    }
+
+    public static void optionTwelve()
+    {
+        System.out.print("You have chose to exit the application. Press 1 to continue. Press other number to go back to main menu: ");
+        while(checkValidInteger()){
+
+        }
         input.nextLine();
         if(choice == 1)
         {
             groupClient.disconnect();
+            fileClient.disconnect();
             System.out.println("You have disconnected from the server successfully! Exiting the application!");
             input.close();
             System.exit(0);
         }
         System.out.println("Going back to main menu............................................\n");
     }
-    
-    public static void printFileMenu()
+
+    public static void checkValidInteger()
     {
-        
+        try
+        {
+            choice = input.nextInt();
+            return true;
+        }
+        catch(Exception e)
+        {
+            System.out.println("Sorry, Your choice is not valid, please enter a valid number.");
+            return false;
+        }
     }
 }
