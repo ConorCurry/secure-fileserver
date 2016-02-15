@@ -16,6 +16,7 @@ public class GroupClient extends Client implements GroupClientInterface {
 			//Tell the server to return a token.
 			message = new Envelope("GET");
 			message.addObject(username); //Add user name string
+			//output.reset();
 			output.writeObject(message);
 		
 			//Get the response from the server

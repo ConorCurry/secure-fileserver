@@ -9,59 +9,84 @@ public class ClientApp
     private static Scanner input;
     private static UserToken token;
     private static int choice;
+    private final int GS_PORT = 8765;
     
     public static void main(String[] args)
     {
         //create a new group client and file client
         groupClient = new GroupClient();
         input = new Scanner(System.in);
+        String username;
+        String gs_name;
+        String fs_name;
+        int gs_port;
+        int fs_port;
         
         while(true)
         {
             //get token user.
             System.out.println("------------Welcome to CS1653 Group-Based File Sharing application------------\n");
-            System.out.print("Please enter your username to log in:");
-            String username = input.nextLine();
-            token = groupClient.getToken(username); //get a token for this user
-            if(token == null)
-            {
-                System.out.println("Sorry, you do not belong to this group server. Exiting.........................");
-                groupClient.disconnect();
-                input.close();
-                System.exit(0);
-            }
+            do {
+                System.out.print("Please enter the group server name: ");
+                gs_name = input.nextLine();
+                System.out.print("Please enter the port number you would like to connect on (0 for default): ");
+                gs_port = input.nextInt();
+                input.nextLine();
+                groupClient = new GroupClient();
+                if(gs_port == 0)
+                {
+                    gs_port = 8765;
+                }
+            } while(!groupClient.connect("localhost", gs_port));
             
-            System.out.printf("Welcome %s ! Do you want to work on group server or file server? Press 1 for group server, 2 for file server");
+            do {
+                System.out.print("Please enter your username to log in: ");
+                username = input.nextLine();
+                token = groupClient.getToken(username); //get a token for this user
+                if(token == null)
+                {
+                    System.out.print("Sorry, you do not belong to this group server. Try again? (y/n): ");
+                    String response = input.nextLine();
+                    if(!response.equals("y")) {
+                        groupClient.disconnect();
+                        input.close();
+                        System.exit(0);
+                    }
+                }
+            } while(token == null);
+            
+            System.out.printf("Welcome %s!\n", username);
+            System.out.println("Do you want to work on group server or file server?\n\tPress 1 for group server, 2 for file server");
             choice = input.nextInt();
             input.nextLine();
             
-            groupClient.disconnect();
-            System.out.print("Please enter the port number to connect to your server, enter 0 for default: ");
-            int port = input.nextInt();
-            input.nextLine();
+            //groupClient.disconnect();
+            //System.out.print("Please enter the port number to connect to your server, enter 0 for default: ");
+            //int port = input.nextInt();
+            //input.nextLine();
             
             if(choice == 1)
             {
-                groupClient = new GroupClient();
-                if(port == 0)
-                {
-                    port = 8765;
-                }
-                groupClient.connect("localhost", port);
                 printGroupMenu();
             }
-            else
+            if(choice==2):
             {
-                if(port == 0)
+                System.out.print("Please enter the file server name: ");
+                fs_name = input.nextInt();
+                System.out.print("Please enter the port number you would like to connect on (0 for default): ");
+                fs_port = input.nextInt();
+                input.nextLine();
+                if(fs_port == 0)
                 {
-                    port = 4321;
+                    fs_port = 4321;
                 }
-                fileClient.connect("localhost", port);
+                fileClient.connect(fs_name, fs_port);
                 printFileMenu();
                 
             }
         }
     }
+    //public 
     
     public static void printGroupMenu()
     {
