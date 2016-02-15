@@ -125,7 +125,7 @@ public class GroupThread extends Thread
 								String groupname = (String)message.getObjContents().get(0); //Extract the username
 								UserToken yourToken = (UserToken)message.getObjContents().get(1); //Extract the token
 								
-								if(createUser(groupname, yourToken))
+								if(createGroup(groupname, yourToken))
 								{
 									response = new Envelope("OK"); //Success
 								}
@@ -378,7 +378,6 @@ public class GroupThread extends Thread
 				else
 				{
 					return false; //User does not exist
-					
 				}
 			}
 			else
@@ -411,6 +410,7 @@ public class GroupThread extends Thread
 				my_gs.groupList.addGroup(groupname, requester);
 				my_gs.groupList.addMember(requester, groupname);
 				my_gs.userList.addOwnership(requester, groupname);
+				my_gs.userList.addGroup(requester, groupname);
 				return true;
 			}
 		}
@@ -504,7 +504,6 @@ public class GroupThread extends Thread
 				{
 					if(my_gs.userList.getUserGroups(user).contains(group))
 					{
-						System.out.println("Already added");
                         return false; //the user is alredy added into that group
 					}
 					else
@@ -516,19 +515,16 @@ public class GroupThread extends Thread
 				}
 				else
 				{
-					System.out.println("User added Not exist");
                     return false; //this user is not the current user of group server
 				}
 			}
 			else
 			{
-				System.out.println("Not Owner");
                 return false; //user is not the owner of group
 			}
 		}
 		else
 		{
-            System.out.println("Not exist");
             return false; //user does not exist
 		}
 	}

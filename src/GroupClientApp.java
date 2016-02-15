@@ -65,7 +65,7 @@ public class GroupClientApp
 			System.out.println("6. Delete User From Group");
 			System.out.println("7. List members of a group");
 			System.out.println("8. Disconnect from the server and exit the application");
-			System.out.println("\nPlease enter your choice: ");
+			System.out.print("\nPlease enter your choice: ");
 
 			//check whether the choice is valid 
 			while(true){
@@ -126,13 +126,13 @@ public class GroupClientApp
 	{
 		System.out.print("You have chose to create user. Press 1 to continue. Press other number to go back to main menu: ");
 		choice = input.nextInt();
+		input.nextLine();
 		if(choice == 1)
 		{
-			System.out.println();
 			System.out.print("Please Enter the Username you would like to create: ");
 			String createdUserName = input.nextLine();
 			if(groupClient.createUser(createdUserName, token))
-				System.out.println("Congratulations! You have created user " + createdUserName + "successfully!");
+				System.out.println("Congratulations! You have created user " + createdUserName + " successfully!");
 			else
 				System.out.println("Sorry. You fail to create this user. Please try other options.");
 		}
@@ -146,12 +146,10 @@ public class GroupClientApp
 		input.nextLine();
 		if(choice == 1)
 		{
-			input.nextLine();
-			System.out.println();
 			System.out.print("Please Enter the Username you would like to delete: ");
 			String deletedUserName = input.nextLine();
-			if(groupClient.createUser(deletedUserName, token))
-				System.out.println("Congratulations! You have deleted user " + deletedUserName + "successfully!");
+			if(groupClient.deleteUser(deletedUserName, token))
+				System.out.println("Congratulations! You have deleted user " + deletedUserName + " successfully!");
 			else
 				System.out.println("Sorry. You fail to delete this user. Please try other options.");
 		}
@@ -162,14 +160,13 @@ public class GroupClientApp
 	{
 		System.out.print("You have chose to create a new group. Press 1 to continue. Press other number to go back to main menu: ");
 		choice = input.nextInt();
+		input.nextLine();
 		if(choice == 1)
 		{
-			input.nextLine();
-			System.out.println();
 			System.out.print("Please Enter the group name you would like to create: ");
 			String groupName = input.nextLine();
 			if(groupClient.createGroup(groupName, token))
-				System.out.println("Congratulations! You have created the new group" + groupName + "successfully!");
+				System.out.println("Congratulations! You have created the new group " + groupName + " successfully!");
 			else
 				System.out.println("Sorry. You fail to create this group. Please try other options.");
 		}
@@ -183,12 +180,10 @@ public class GroupClientApp
 		input.nextLine();
 		if(choice == 1)
 		{
-			input.nextLine();
-			System.out.println();
 			System.out.print("Please Enter the group name you would like to delete: ");
 			String groupName = input.nextLine();
 			if(groupClient.deleteGroup(groupName, token))
-				System.out.println("Congratulations! You have deleted the new group" + groupName + "successfully!");
+				System.out.println("Congratulations! You have deleted the new group " + groupName + " successfully!");
 			else
 				System.out.println("Sorry. You fail to delete this group. Please try other options.");
 		}
@@ -202,14 +197,12 @@ public class GroupClientApp
 		input.nextLine();
 		if(choice == 1)
 		{
-			input.nextLine();
-			System.out.println();
 			System.out.print("Please Enter the Username to be added: ");
 			String userName = input.nextLine();
 			System.out.print("Please Enter the group name you would like to add: ");
 			String groupName = input.nextLine();
 			if(groupClient.addUserToGroup(userName, groupName, token))
-				System.out.println("Congratulations! You have added the user " + userName +" to the group" + groupName + "successfully!");
+				System.out.println("Congratulations! You have added the user " + userName +" to the group " + groupName + " successfully!");
 			else
 				System.out.println("Sorry. You fail to add this user to the group. Please try other options.");
 
@@ -224,16 +217,15 @@ public class GroupClientApp
 		input.nextLine();
 		if(choice == 1)
 		{
-			input.nextLine();
 			System.out.println();
 			System.out.print("Please Enter the Username to be deleted: ");
 			String userName = input.nextLine();
 			System.out.print("Please Enter the group name which the user belongs to: ");
 			String groupName = input.nextLine();
 			if(groupClient.deleteUserFromGroup(userName, groupName, token))
-				System.out.println("Congratulations! You have deleted the user " + userName +" from the group" + groupName + "successfully!");
+				System.out.println("\nCongratulations! You have deleted the user " + userName +" from the group " + groupName + " successfully!");
 			else
-				System.out.println("Sorry. You fail to delete this user from the group. Please try other options.");
+				System.out.println("\nSorry. You fail to delete this user from the group. Please try other options.");
 
 		}
 		System.out.println("Going back to main menu............................................\n");
@@ -246,14 +238,13 @@ public class GroupClientApp
 		input.nextLine();
 		if(choice == 1)
 		{
-			input.nextLine();
 			System.out.println();
 			System.out.print("Please Enter the group name which you would like to see all the members: ");
 			String groupName = input.nextLine();
 			List<String> members = new ArrayList<String>(groupClient.listMembers(groupName, token));
 			if(members != null)
 			{
-				System.out.println("Congratulations! You have fetched all the memers from the group" + groupName + "successfully!");
+				System.out.println("\nCongratulations! You have fetched all the memers from the group " + groupName + " successfully!");
 				System.out.println("Start to list");
 				for(int i = 0; i < members.size(); i++)
 				{
@@ -279,5 +270,4 @@ public class GroupClientApp
 		}
 		System.out.println("Going back to main menu............................................\n");
 	}
-
 }
