@@ -504,7 +504,8 @@ public class GroupThread extends Thread
 				{
 					if(my_gs.userList.getUserGroups(user).contains(group))
 					{
-						return false; //the user is alredy added into that group
+						System.out.println("Already added");
+                        return false; //the user is alredy added into that group
 					}
 					else
 					{
@@ -515,17 +516,20 @@ public class GroupThread extends Thread
 				}
 				else
 				{
-					return false; //this user is not the current user of group server
+					System.out.println("User added Not exist");
+                    return false; //this user is not the current user of group server
 				}
 			}
 			else
 			{
-				return false; //user is not the owner of group
+				System.out.println("Not Owner");
+                return false; //user is not the owner of group
 			}
 		}
 		else
 		{
-			return false; //user does not exist 
+            System.out.println("Not exist");
+            return false; //user does not exist
 		}
 	}
 

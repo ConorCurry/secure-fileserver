@@ -26,7 +26,6 @@ public class GroupServer extends Server {
 
 	public void start() {
 		// Overwrote server.start() because if no user file exists, initial admin account needs to be created
-
 		String userFile = "UserList.bin";
 		String groupFile = "GroupList.bin";
 		Scanner console = new Scanner(System.in);
@@ -91,6 +90,7 @@ public class GroupServer extends Server {
 
 			while(true)
 			{
+				System.out.println("Waiting for connections");
 				sock = serverSock.accept();
 				thread = new GroupThread(sock, this);
 				thread.start();

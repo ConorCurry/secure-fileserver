@@ -33,7 +33,7 @@ public class GroupClientApp
 				System.exit(0);
 			}
 		}
-		groupClient.connect("ALPHA", port);
+		groupClient.connect("localhost", port);
 		while(true)
 		{
 			printMainMenu();
@@ -126,10 +126,8 @@ public class GroupClientApp
 	{
 		System.out.print("You have chose to create user. Press 1 to continue. Press other number to go back to main menu: ");
 		choice = input.nextInt();
-		input.nextLine();
 		if(choice == 1)
 		{
-			input.nextLine();
 			System.out.println();
 			System.out.print("Please Enter the Username you would like to create: ");
 			String createdUserName = input.nextLine();
@@ -164,7 +162,6 @@ public class GroupClientApp
 	{
 		System.out.print("You have chose to create a new group. Press 1 to continue. Press other number to go back to main menu: ");
 		choice = input.nextInt();
-		input.nextLine();
 		if(choice == 1)
 		{
 			input.nextLine();
