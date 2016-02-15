@@ -52,6 +52,12 @@ public class GroupClientApp
 			System.out.println("Please enter your username:");
 			String username = input.nextLine();
 			token = groupClient.getToken(username); //get a token for this user
+			if(token == null)
+			{
+				System.out.println("Sorry, you do not belong to this group server. Exiting.........................");
+				groupClient.disconnect();
+				System.exit(0);
+			}
 		}
 		else
 		{	
