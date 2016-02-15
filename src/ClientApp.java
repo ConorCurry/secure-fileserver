@@ -9,6 +9,7 @@ public class ClientApp
     private static Scanner input;
     private static UserToken token;
     private static int choice;
+    private static String group_work;
     
     public static void main(String[] args)
     {
@@ -29,7 +30,12 @@ public class ClientApp
 
         //get token user.
         System.out.print("Please enter your username to log in:");
-        String username = input.nextLine();
+        String username; 
+        while(true)
+        {
+          username = input.nextLine();
+          if(checkValidString(username)) break;
+        }
         token = groupClient.getToken(username); //get a token for this user
         if(token == null)
         {
@@ -40,14 +46,14 @@ public class ClientApp
             System.exit(0);
         }
             
-        System.out.printf("Welcome %s ! Now you are entering the main menu!"， username);
+        System.out.printf("Welcome %s ! Now you are entering the main menu!", username);
         while(true)
         {
             printMenu();
         }
     }
     
-    public static void printGroupMenu()
+    public static void printMenu()
     {
         
         System.out.println("\t\t\tMain Menu: ");
@@ -121,7 +127,7 @@ public class ClientApp
                 optionEleven();
                 break;
 
-            defa]:
+            default:
                 optionTwelve();
                 break;
         }
@@ -137,7 +143,12 @@ public class ClientApp
         if(choice == 1)
         {
             System.out.print("Please Enter the Username you would like to create: ");
-            String createdUserName = input.nextLine();
+            String createdUserName;
+            while(true)
+            {
+                createdUserName = input.nextLine();
+                if(checkValidString(createdUserName)) break;
+            }
             if(groupClient.createUser(createdUserName, token))
                 System.out.println("Congratulations! You have created user " + createdUserName + " successfully!");
             else
@@ -149,13 +160,19 @@ public class ClientApp
     public static void optionTwo()
     {
         System.out.print("You have chose to delete user. Press 1 to continue. Press other number to go back to main menu: ");
-        
-        checkValidInteger;
+        while(checkValidInteger()){
+
+        }
         input.nextLine();
         if(choice == 1)
         {
             System.out.print("Please Enter the Username you would like to delete: ");
-            String deletedUserName = input.nextLine();
+            String deletedUserName;
+            while(true)
+            {
+                deletedUserName = input.nextLine();
+                if(checkValidString(deletedUserName)) break;
+            }
             if(groupClient.deleteUser(deletedUserName, token))
                 System.out.println("Congratulations! You have deleted user " + deletedUserName + " successfully!");
             else
@@ -174,7 +191,12 @@ public class ClientApp
         if(choice == 1)
         {
             System.out.print("Please Enter the group name you would like to create: ");
-            String groupName = input.nextLine();
+            String groupName;
+            while(true)
+            {
+                groupName = input.nextLine();
+                if(checkValidString(groupName)) break;
+            }
             if(groupClient.createGroup(groupName, token))
                 System.out.println("Congratulations! You have created the new group " + groupName + " successfully!");
             else
@@ -193,7 +215,12 @@ public class ClientApp
         if(choice == 1)
         {
             System.out.print("Please Enter the group name you would like to delete: ");
-            String groupName = input.nextLine();
+            String groupName;
+            while(true)
+            {
+                groupName = input.nextLine();
+                if(checkValidString(groupName)) break;
+            }
             if(groupClient.deleteGroup(groupName, token))
                 System.out.println("Congratulations! You have deleted the new group " + groupName + " successfully!");
             else
@@ -212,9 +239,19 @@ public class ClientApp
         if(choice == 1)
         {
             System.out.print("Please Enter the Username to be added: ");
-            String userName = input.nextLine();
+            String userName;
+            while(true)
+            {
+                userName = input.nextLine();
+                if(checkValidString(userName)) break;
+            }
             System.out.print("Please Enter the group name you would like to add: ");
-            String groupName = input.nextLine();
+            String groupName;
+            while(true)
+            {
+                groupName = input.nextLine();
+                if(checkValidString(groupName)) break;
+            }
             if(groupClient.addUserToGroup(userName, groupName, token))
                 System.out.println("Congratulations! You have added the user " + userName +" to the group " + groupName + " successfully!");
             else
@@ -235,9 +272,19 @@ public class ClientApp
         {
             System.out.println();
             System.out.print("Please Enter the Username to be deleted: ");
-            String userName = input.nextLine();
-            System.out.print("Please Enter the group name which the user belongs to: ");
-            String groupName = input.nextLine();
+            String userName;
+            while(true)
+            {
+                userName = input.nextLine();
+                if(checkValidString(userName)) break;
+            }
+            System.out.print("Please Enter the group name you would like to be deleted from: ");
+            String groupName;
+            while(true)
+            {
+                groupName = input.nextLine();
+                if(checkValidString(groupName)) break;
+            }
             if(groupClient.deleteUserFromGroup(userName, groupName, token))
                 System.out.println("\nCongratulations! You have deleted the user " + userName +" from the group " + groupName + " successfully!");
             else
@@ -258,7 +305,12 @@ public class ClientApp
         {
             System.out.println();
             System.out.print("Please Enter the group name which you would like to see all the members: ");
-            String groupName = input.nextLine();
+            String groupName;
+            while(true)
+            {
+                groupName = input.nextLine();
+                if(checkValidString(groupName)) break;
+            }
             List<String> members = new ArrayList<String>(groupClient.listMembers(groupName, token));
             if(members != null)
             {
@@ -313,7 +365,7 @@ public class ClientApp
         System.out.println("Going back to main menu............................................\n");
     }
 
-    public static void checkValidInteger()
+    public static boolean checkValidInteger()
     {
         try
         {
@@ -325,5 +377,11 @@ public class ClientApp
             System.out.println("Sorry, Your choice is not valid, please enter a valid number.");
             return false;
         }
+    }
+
+    public static boolean checkValidString(String to_check)
+    {
+        if(!to_check.equals("")) return true;
+        return false;
     }
 }
