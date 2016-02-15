@@ -22,40 +22,38 @@ public class ClientApp
         int gs_port;
         int fs_port;
         
-        while(true)
-        {
-            //get token user.
-            System.out.println("------------Welcome to CS1653 Group-Based File Sharing application------------\n");
-            do {
-                System.out.print("Please enter the group server name: ");
-                gs_name = input.nextLine();
-                System.out.print("Please enter the port number you would like to connect on (0 for default): ");
-                gs_port = input.nextInt();
-                input.nextLine();
-                groupClient = new GroupClient();
-                if(gs_port == 0)
-                {
-                    gs_port = 8765;
+        System.out.println("------------Welcome to CS1653 Group-Based File Sharing application------------\n");
+        do {
+            System.out.print("Please enter the group server name: ");
+            gs_name = input.nextLine();
+            System.out.print("Please enter the port number you would like to connect on (0 for default): ");
+            gs_port = input.nextInt();
+            input.nextLine();
+            groupClient = new GroupClient();
+            if(gs_port == 0)
+            {
+                gs_port = 8765;
+            }
+        } while(!groupClient.connect("localhost", gs_port));
+        
+        do {
+            System.out.print("Please enter your username to log in: ");
+            username = input.nextLine();
+            token = groupClient.getToken(username); //get a token for this user
+            if(token == null)
+            {
+                System.out.print("Sorry, you do not belong to this group server. Try again? (y/n): ");
+                String response = input.nextLine();
+                if(!response.equals("y")) {
+                    groupClient.disconnect();
+                    input.close();
+                    System.exit(0);
                 }
-            } while(!groupClient.connect("localhost", gs_port));
-            
-            do {
-                System.out.print("Please enter your username to log in: ");
-                username = input.nextLine();
-                token = groupClient.getToken(username); //get a token for this user
-                if(token == null)
-                {
-                    System.out.print("Sorry, you do not belong to this group server. Try again? (y/n): ");
-                    String response = input.nextLine();
-                    if(!response.equals("y")) {
-                        groupClient.disconnect();
-                        input.close();
-                        System.exit(0);
-                    }
-                }
-            } while(token == null);
-            
-            System.out.printf("Welcome %s!\n", username);
+            }
+        } while(token == null);
+        
+        System.out.printf("Welcome %s!\n", username);
+        while(true) {
             System.out.println("Do you want to work on group server or file server?\n\tPress 1 for group server, 2 for file server");
             choice = input.nextInt();
             input.nextLine();
@@ -69,10 +67,10 @@ public class ClientApp
             {
                 printGroupMenu();
             }
-            if(choice==2):
+            if(choice==2)
             {
                 System.out.print("Please enter the file server name: ");
-                fs_name = input.nextInt();
+                fs_name = input.nextLine();
                 System.out.print("Please enter the port number you would like to connect on (0 for default): ");
                 fs_port = input.nextInt();
                 input.nextLine();
@@ -91,7 +89,7 @@ public class ClientApp
     public static void printGroupMenu()
     {
         
-        System.out.println("\t\t\tMain Menu: ");
+        System.out.println("\nMain Menu: ");
         System.out.println("------------Please choose the number of what you want to do from the following options-------\n");
         System.out.println("1. Create User");
         System.out.println("2. Delete User");
