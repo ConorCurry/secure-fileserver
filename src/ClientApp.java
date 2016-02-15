@@ -9,18 +9,18 @@ public class ClientApp
     private static Scanner input;
     private static UserToken token;
     private static int choice;
-    private final int GS_PORT = 8765;
+    private static String username;
+    private static String gs_name, fs_name;
+    private static int fs_port, gs_port;
+    private static final int GS_PORT = 8765;
+    private static final int FS_PORT = 4321;
     
     public static void main(String[] args)
     {
         //create a new group client and file client
         groupClient = new GroupClient();
+        fileClient = new FileClient();
         input = new Scanner(System.in);
-        String username;
-        String gs_name;
-        String fs_name;
-        int gs_port;
-        int fs_port;
         
         System.out.println("------------Welcome to CS1653 Group-Based File Sharing application------------\n");
         do {
@@ -32,7 +32,7 @@ public class ClientApp
             groupClient = new GroupClient();
             if(gs_port == 0)
             {
-                gs_port = 8765;
+                gs_port = GS_PORT;
             }
         } while(!groupClient.connect(gs_name, gs_port));
         
@@ -54,34 +54,7 @@ public class ClientApp
         
         System.out.printf("Welcome %s!\n", username);
         while(true) {
-            System.out.println("Do you want to work on group server or file server?\n\tPress 1 for group server, 2 for file server");
-            choice = input.nextInt();
-            input.nextLine();
-            
-            //groupClient.disconnect();
-            //System.out.print("Please enter the port number to connect to your server, enter 0 for default: ");
-            //int port = input.nextInt();
-            //input.nextLine();
-            
-            if(choice == 1)
-            {
-                printGroupMenu();
-            }
-            if(choice==2)
-            {
-                System.out.print("Please enter the file server name: ");
-                fs_name = input.nextLine();
-                System.out.print("Please enter the port number you would like to connect on (0 for default): ");
-                fs_port = input.nextInt();
-                input.nextLine();
-                if(fs_port == 0)
-                {
-                    fs_port = 4321;
-                }
-                fileClient.connect(fs_name, fs_port);
-                printFileMenu();
-                
-            }
+            printGroupMenu();
         }
     }
     //public 
@@ -155,7 +128,7 @@ public class ClientApp
                 break;
                 
             case 8:
-                connectToFileserver();
+                connectFileserver();
                 break;
                 
             case 9:
@@ -313,6 +286,42 @@ public class ClientApp
                 System.out.println("Sorry. You fail to delete this user from the group. Please try other options.");
         }
         System.out.println("Going back to main menu............................................\n");
+    }
+    
+    public static void connectFileserver() {
+        System.out.print("You've chosen to modify your fileserver connection. Press 1 to continue, or another number to return to the menu. ");
+        choice = input.nextInt();
+        input.nextLine();
+        if(choice == 1) {
+            System.out.print("Please enter the file server name: ");
+            fs_name = input.nextLine();
+            System.out.print("Please enter the port number you would like to connect on (0 for default): ");
+            fs_port = input.nextInt();
+            input.nextLine();
+            if(fs_port == 0)
+            {
+                fs_port = FS_PORT;
+            }
+            fileClient.connect(fs_name, fs_port);
+        }
+        System.out.println("Returning to main menu...");
+        
+    }
+    
+    public static void delFile() {
+    
+    }
+    
+    public static void downloadFile() {
+    
+    }
+    
+    public static void uploadFile() {
+    
+    }
+    
+    public static void listFiles() {
+    
     }
     
     public static void end()
