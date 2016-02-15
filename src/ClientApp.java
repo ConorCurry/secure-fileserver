@@ -112,7 +112,7 @@ public class ClientApp
                 System.out.println("Sorry, Your choice is not valid, please enter a valid number.");
                 continue;
             }
-            if(choice < 1 && choice > 8)
+            if(choice < 1 || choice > 8)
             {
                 System.out.println("Sorry, Your choice is not valid, please enter a valid number.");
             }
@@ -122,40 +122,40 @@ public class ClientApp
         
         switch(choice){
             case 1:
-                optionOne();
+                cuser();
                 break;
                 
             case 2:
-                optionTwo();
+                duser();
                 break;
                 
             case 3:
-                optionThree();
+                cgroup();
                 break;
                 
             case 4:
-                optionFour();
+                dgroup();
                 break;
                 
             case 5:
-                optionFive();
+                addUser();
                 break;
                 
             case 6:
-                optionSix();
+                removeUser();
                 break;
                 
             case 7:
-                optionSeven();
+                listAll();
                 break;
                 
             default:
-                optionEight();
+                end();
                 break;
         }
     }
     
-    public  static void optionOne()
+    public  static void cuser()
     {
         System.out.print("You have chose to create user. Press 1 to continue. Press other number to go back to main menu: ");
         choice = input.nextInt();
@@ -172,7 +172,7 @@ public class ClientApp
         System.out.println("Going back to main menu............................................\n");
     }
     
-    public static void optionTwo()
+    public static void duser()
     {
         System.out.print("You have chose to delete user. Press 1 to continue. Press other number to go back to main menu: ");
         choice = input.nextInt();
@@ -189,7 +189,7 @@ public class ClientApp
         System.out.println("Going back to main menu............................................\n");
     }
     
-    public static void optionThree()
+    public static void cgroup()
     {
         System.out.print("You have chose to create a new group. Press 1 to continue. Press other number to go back to main menu: ");
         choice = input.nextInt();
@@ -206,7 +206,7 @@ public class ClientApp
         System.out.println("Going back to main menu............................................\n");
     }
     
-    public static void optionFour()
+    public static void dgroup()
     {
         System.out.print("You have chose to delete a new group. Press 1 to continue. Press other number to go back to main menu: ");
         choice = input.nextInt();
@@ -223,7 +223,7 @@ public class ClientApp
         System.out.println("Going back to main menu............................................\n");
     }
     
-    public static void optionFive()
+    public static void addUser()
     {
         System.out.print("You have chose to add a user to a group. Press 1 to continue. Press other number to go back to main menu: ");
         choice = input.nextInt();
@@ -243,7 +243,7 @@ public class ClientApp
         System.out.println("Going back to main menu............................................\n");
     }
     
-    public static void optionSix()
+    public static void removeUser()
     {
         System.out.print("You have chose to delete a user from a group. Press 1 to continue. Press other number to go back to main menu: ");
         choice = input.nextInt();
@@ -264,7 +264,7 @@ public class ClientApp
         System.out.println("Going back to main menu............................................\n");
     }
     
-    public static void optionSeven()
+    public static void listAll()
     {
         System.out.print("You have chose to list all the members of the group. Press 1 to continue. Press other number to go back to main menu: ");
         choice = input.nextInt();
@@ -290,9 +290,9 @@ public class ClientApp
         System.out.println("Going back to main menu............................................\n");
     }
     
-    public static void optionEight()
+    public static void end()
     {
-        System.out.print("You have chose to list all the members of the group. Press 1 to continue. Press other number to go back to main menu: ");
+        System.out.print("You have chosen to disconnect. Press 1 to continue. Press other number to go back to main menu: ");
         choice = input.nextInt();
         input.nextLine();
         if(choice == 1)
