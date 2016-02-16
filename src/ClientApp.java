@@ -309,7 +309,27 @@ public class ClientApp
     }
     
     public static void delFile() {
-    
+        System.out.print("You have chosen to delete a file. Press 1 to continue. Press another number to go back to main menu: ");
+        choice = input.nextInt();
+        input.nextLine();
+        if(choice == 1)
+        {
+            boolean success = false;
+            do {
+                System.out.print("Please enter the path of the file you want to delete: ");
+                String path = input.nextLine();
+                success = fileClient.delete(path, token); 
+                if(success) {
+                    System.out.printf("Successfully deleted %s\n", path);
+                } else {
+                    System.out.print("Delete unsuccessful, try again? (y/n): ");
+                    if(input.nextLine().equals("n")) {
+                        break;
+                    }
+                }
+            } while(!success);            
+        }
+        System.out.println("Returning to main menu...");
     }
     
     public static void downloadFile() {
