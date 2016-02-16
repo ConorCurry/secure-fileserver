@@ -63,26 +63,28 @@ public class ClientApp
     {
         
         //retake tokens each time in case changes made by others.
-        System.out.println("\nMain Menu: ");
-        System.out.println("------------Please choose the number of what you want to do from the following options-------\n");
-        System.out.println("1. Create User");
-        System.out.println("2. Delete User");
-        System.out.println("3. Create Group");
-        System.out.println("4. Delete Group");
-        System.out.println("5. Add User To Group");
-        System.out.println("6. Delete User From Group");
-        System.out.println("7. List members of a group");
-        System.out.println("8. Modify fileserver connection");
-        System.out.println("9. Delete file");
-        System.out.println("10. Download file");
-        System.out.println("11. Upload file");
-        System.out.println("12. List all accessible files");
-        System.out.println("13. List the groups you belong to");
-        System.out.println("14. Disconnect from the server and exit the application");
-        System.out.print("\nPlease enter your choice: ");
+        while(true){
+            System.out.println("\nMain Menu: ");
+            System.out.println("------------Please choose the number of what you want to do from the following options-------\n");
+            System.out.println("0. Disconnect from the server and exit the application");
+            System.out.println("1. Modify fileserver connection");
+            System.out.println("2. Create User");
+            System.out.println("3. Delete User");
+            System.out.println("4. Create Group");
+            System.out.println("5. Delete Group");
+            System.out.println("6. Add User To Group");
+            System.out.println("7. Delete User From Group");
+            System.out.println("8. List members of a group");
+            System.out.println("9. List the groups you belong to");
+            if(fileClient.isConnected()) {
+                System.out.println("10. Delete file");
+                System.out.println("11. Download file");
+                System.out.println("12. Upload file");
+                System.out.println("13. List all accessible files");
+            }
+            System.out.print("\nPlease enter your choice: ");
         
         //check whether the choice is valid
-        while(true){
             checkIdentity();
             try
             {
@@ -93,6 +95,10 @@ public class ClientApp
                 System.out.println("Sorry, Your choice is not valid, please enter a valid number.");
                 continue;
             }
+            if(choice > 1 && choice < 14 && choice > 9 && !fileClient.isConnected()) {
+                System.out.println("Invalid option while not connected to a fileserver");
+                continue;
+            }
             if(choice < 1 || choice > 14)
             {
                 System.out.println("Sorry, Your choice is not valid, please enter a valid number.");
@@ -101,60 +107,49 @@ public class ClientApp
         }
         input.nextLine();
         
-        //TODO: maybe break up into some submenus?
         switch(choice){
+            case 0:
+                end();
+                break;
             case 1:
-                cuser();
-                break;
-                
-            case 2:
-                duser();
-                break;
-                
-            case 3:
-                cgroup();
-                break;
-                
-            case 4:
-                dgroup();
-                break;
-                
-            case 5:
-                addUser();
-                break;
-                
-            case 6:
-                removeUser();
-                break;
-                
-            case 7:
-                listAll();
-                break;
-                
-            case 8:
                 connectFileserver();
                 break;
-                
+            case 2:
+                cuser();
+                break;
+            case 3:
+                duser();
+                break;
+            case 4:
+                cgroup();
+                break;
+            case 5:
+                dgroup();
+                break;
+            case 6:
+                addUser();
+                break;
+            case 7:
+                removeUser();
+                break;
+            case 8:
+                listAll();
+                break;  
             case 9:
+                printGroups();
+                break;    
+            case 10:
                 delFile();
                 break;
-            
-            case 10:
+            case 11:
                 downloadFile();
                 break;
-                
-            case 11:
+            case 12:
                 uploadFile();
                 break;
-                
-            case 12:
+            case 13:
                 listFiles();
                 break;
-
-            case 13:
-                printGroups();
-                break;
-                
             default:
                 end();
                 break;
@@ -310,7 +305,10 @@ public class ClientApp
             {
                 fs_port = FS_PORT;
             }
-            fileClient.connect(fs_name, fs_port);
+            if(!fileClient.connect(fs_name, fs_port)) {
+                fs_name = null;
+                fs_port = 0;
+            }
         }
         System.out.println("Returning to main menu...");
         
@@ -320,7 +318,10 @@ public class ClientApp
         System.out.print("You have chosen to delete a file. Press 1 to continue. Press another number to go back to main menu: ");
         choice = input.nextInt();
         input.nextLine();
-        if(choice == 1)
+        if(!fileClient.isConnected()) {
+            System.out.println("You must be connected to a fileserver to use this function");
+        }
+        else if(choice == 1)
         {
             boolean success = false;
             do {
@@ -344,7 +345,10 @@ public class ClientApp
         System.out.print("You've chosen to download a file. Press 1 to continue, or another number to return to the menu. ");
         choice = input.nextInt();
         input.nextLine();
-        if(choice == 1)
+        if(!fileClient.isConnected()) {
+            System.out.println("You must be connected to a fileserver to use this function");
+        }
+        else if(choice == 1)
         {
             boolean success = false;
             do {
@@ -369,8 +373,11 @@ public class ClientApp
     public static void uploadFile() {
         System.out.print("You've chosen to upload a file. Press 1 to continue, or another number to return to the menu. ");
         choice = input.nextInt();
-        input.nextLine();
-        if(choice == 1)
+        input.nextLine();   
+        if(!fileClient.isConnected()) {
+            System.out.println("You must be connected to a fileserver to use this function");
+        }
+        else if(choice == 1)
         {
             boolean success = false;
             do {
@@ -395,9 +402,11 @@ public class ClientApp
     }
     
     public static void listFiles() {
-        System.out.print("You've chosen to list files. Press 1 to continue, or another number to return to the menu. ");
         choice = input.nextInt();
         input.nextLine();
+        if(!fileClient.isConnected()) {
+            System.out.println("You must be connected to a fileserver to list files");
+        }
         if(choice == 1)
         {
             ArrayList<String> allFiles = (ArrayList<String>)fileClient.listFiles(token);
