@@ -402,8 +402,6 @@ public class ClientApp
     }
     
     public static void listFiles() {
-        choice = input.nextInt();
-        input.nextLine();
         if(!fileClient.isConnected()) {
             System.out.println("You must be connected to a fileserver to list files");
         }
