@@ -26,8 +26,8 @@ USAGE:
  This client will connect to the group server by specifying the name and also the port number consistent with the one for the group server.
  The username will be asked for log in.
  The user will be shown a list of their groups and also choose the one they would like to work on.
- The main menu will be poped up, and a list of operations for group server will be shown.
- If the user would like to work on file server as well, the user can start file client by the corresponding option.
+ The main menu will appear, and a list of operations for group server will be shown.
+ If the user would like to work on file server as well, the user can connect via the corresponding option.
  And the submenu of the file server will be shown.
  If the user would like to double check their groups, they can list groups anytime. And also, they can change the working group whenever they like.
  The user will exit the application if they would like to. 
