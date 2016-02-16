@@ -239,13 +239,15 @@ public class ClientApp
         {
             System.out.print("Please Enter the Username to be added: ");
             String userName = input.nextLine();
-            //System.out.print("Please Enter the group name you would like to add: ");
-            //String groupName = input.nextLine();
-            if(groupClient.addUserToGroup(userName, group_work, token))
-                System.out.println("Congratulations! You have added the user " + userName +" to the group " + group_work + " successfully!");
+            if(group_work.equals(""))
+                    System.out.println("You don't have any group yet! You need to create a group, or wait to be added to a group!");
             else
-                System.out.println("Sorry. You fail to add this user to the group. Please try other options.");
-            
+            { 
+                if(groupClient.addUserToGroup(userName, group_work, token))
+                    System.out.println("Congratulations! You have added the user " + userName +" to the group " + group_work + " successfully!");
+                else
+                    System.out.println("Sorry. You fail to add this user to the group. Please try other options.");
+            }
         }
         System.out.println("Going back to main menu............................................\n");
     }
@@ -257,15 +259,17 @@ public class ClientApp
         input.nextLine();
         if(choice == 1)
         {
-            System.out.println();
             System.out.print("Please Enter the Username to be deleted: ");
             String userName = input.nextLine();
-            //System.out.print("Please Enter the group name which the user belongs to: ");
-            //String groupName = input.nextLine();
-            if(groupClient.deleteUserFromGroup(userName, group_work, token))
-                System.out.println("\nCongratulations! You have deleted the user " + userName +" from the group " + group_work + " successfully!");
+            if(group_work.equals(""))
+                System.out.println("You don't have any group yet! You need to create a group, or wait to be added to a group!");
             else
-                System.out.println("\nSorry. You fail to delete this user from the group. Please try other options.");
+            { 
+                if(groupClient.deleteUserFromGroup(userName, group_work, token))
+                    System.out.println("\nCongratulations! You have deleted the user " + userName +" from the group " + group_work + " successfully!");
+                else
+                    System.out.println("\nSorry. You fail to delete this user from the group. Please try other options.");
+            }
             
         }
         System.out.println("Going back to main menu............................................\n");
@@ -391,15 +395,18 @@ public class ClientApp
                 String src = input.nextLine();
                 System.out.print("Please enter your destination file path: ");
                 String dest = input.nextLine();
-                /*System.out.print("Please enter the group you would like to upload to: ");
-                 String grp = input.nextLine();*/
-                success = fileClient.upload(src, dest, group_work, token);
-                if(success) {
-                    System.out.println("Upload successful!");
-                } else {
-                    System.out.print("Upload unsuccessful, try again? (y/n): ");
-                    if(input.nextLine().equals("n")) {
-                        break;
+                if(group_work.equals(""))
+                    System.out.println("You don't have any group yet! You need to create a group, or wait to be added to a group!");
+                else
+                {                
+                    success = fileClient.upload(src, dest, group_work, token);
+                    if(success) {
+                        System.out.println("Upload successful!");
+                    } else {
+                        System.out.print("Upload unsuccessful, try again? (y/n): ");
+                        if(input.nextLine().equals("n")) {
+                            break;
+                        }
                     }
                 }
             } while(!success);
@@ -454,8 +461,8 @@ public class ClientApp
         if(choice == 1)
         {
             groupClient.disconnect();
-            fileClient.disconnect();
-            System.out.println("You have disconnected from the server successfully! Exiting the application!");
+            if(fileClient.isConnected()) fileClient.disconnect();
+            System.out.println("You have disconnected from the system successfully! Exiting the application!");
             input.close();
             System.exit(0);
         }
@@ -473,7 +480,6 @@ public class ClientApp
             input.close();
             System.exit(0);
         }
-        
     }
     
     public static void changeGroup()
