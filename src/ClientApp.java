@@ -12,6 +12,7 @@ public class ClientApp
     private static String username;
     private static String gs_name, fs_name;
     private static int fs_port, gs_port;
+    private static String group_work;
     private static final int GS_PORT = 8765;
     private static final int FS_PORT = 4321;
     
@@ -53,11 +54,12 @@ public class ClientApp
         } while(token == null);
         
         System.out.printf("Welcome %s!\n", username);
+        changeGroup();
         while(true) {
             printGroupMenu();
         }
     }
-    //public 
+    //public
     
     public static void printGroupMenu()
     {
@@ -76,15 +78,16 @@ public class ClientApp
             System.out.println("7. Delete User From Group");
             System.out.println("8. List members of a group");
             System.out.println("9. List the groups you belong to");
+            System.out.println("10. Change the group you would like to work on");
             if(fileClient.isConnected()) {
-                System.out.println("10. Delete file");
-                System.out.println("11. Download file");
-                System.out.println("12. Upload file");
-                System.out.println("13. List all accessible files");
+                System.out.println("11. Delete file");
+                System.out.println("12. Download file");
+                System.out.println("13. Upload file");
+                System.out.println("14. List all accessible files");
             }
             System.out.print("\nPlease enter your choice: ");
-        
-        //check whether the choice is valid
+            
+            //check whether the choice is valid
             checkIdentity();
             try
             {
@@ -134,20 +137,23 @@ public class ClientApp
                 break;
             case 8:
                 listAll();
-                break;  
+                break;
             case 9:
                 printGroups();
-                break;    
+                break;
             case 10:
-                delFile();
+                changeGroup();
                 break;
             case 11:
-                downloadFile();
+                delFile();
                 break;
             case 12:
-                uploadFile();
+                downloadFile();
                 break;
             case 13:
+                uploadFile();
+                break;
+            case 14:
                 listFiles();
                 break;
             default:
@@ -233,10 +239,10 @@ public class ClientApp
         {
             System.out.print("Please Enter the Username to be added: ");
             String userName = input.nextLine();
-            System.out.print("Please Enter the group name you would like to add: ");
-            String groupName = input.nextLine();
-            if(groupClient.addUserToGroup(userName, groupName, token))
-                System.out.println("Congratulations! You have added the user " + userName +" to the group " + groupName + " successfully!");
+            //System.out.print("Please Enter the group name you would like to add: ");
+            //String groupName = input.nextLine();
+            if(groupClient.addUserToGroup(userName, group_work, token))
+                System.out.println("Congratulations! You have added the user " + userName +" to the group " + group_work + " successfully!");
             else
                 System.out.println("Sorry. You fail to add this user to the group. Please try other options.");
             
@@ -254,10 +260,10 @@ public class ClientApp
             System.out.println();
             System.out.print("Please Enter the Username to be deleted: ");
             String userName = input.nextLine();
-            System.out.print("Please Enter the group name which the user belongs to: ");
-            String groupName = input.nextLine();
-            if(groupClient.deleteUserFromGroup(userName, groupName, token))
-                System.out.println("\nCongratulations! You have deleted the user " + userName +" from the group " + groupName + " successfully!");
+            //System.out.print("Please Enter the group name which the user belongs to: ");
+            //String groupName = input.nextLine();
+            if(groupClient.deleteUserFromGroup(userName, group_work, token))
+                System.out.println("\nCongratulations! You have deleted the user " + userName +" from the group " + group_work + " successfully!");
             else
                 System.out.println("\nSorry. You fail to delete this user from the group. Please try other options.");
             
@@ -286,7 +292,7 @@ public class ClientApp
                 }
             }
             else
-                System.out.println("Sorry. You fail to delete this user from the group. Please try other options.");
+                System.out.println("Sorry. You fail to list members of this group. Please try other options.");
         }
         System.out.println("Going back to main menu............................................\n");
     }
@@ -311,7 +317,6 @@ public class ClientApp
             }
         }
         System.out.println("Returning to main menu...");
-        
     }
     
     public static void delFile() {
@@ -327,7 +332,7 @@ public class ClientApp
             do {
                 System.out.print("Please enter the path of the file you want to delete: ");
                 String path = input.nextLine();
-                success = fileClient.delete(path, token); 
+                success = fileClient.delete(path, token);
                 if(success) {
                     System.out.printf("Successfully deleted %s\n", path);
                 } else {
@@ -336,7 +341,7 @@ public class ClientApp
                         break;
                     }
                 }
-            } while(!success);            
+            } while(!success);
         }
         System.out.println("Returning to main menu...");
     }
@@ -373,7 +378,7 @@ public class ClientApp
     public static void uploadFile() {
         System.out.print("You've chosen to upload a file. Press 1 to continue, or another number to return to the menu. ");
         choice = input.nextInt();
-        input.nextLine();   
+        input.nextLine();
         if(!fileClient.isConnected()) {
             System.out.println("You must be connected to a fileserver to use this function");
         }
@@ -385,10 +390,10 @@ public class ClientApp
                 String src = input.nextLine();
                 System.out.print("Please enter your destination file path: ");
                 String dest = input.nextLine();
-                System.out.print("Please enter the group you would like to upload to: ");
-                String grp = input.nextLine();
-                success = fileClient.upload(src, dest, grp, token);
-            if(success) {
+                /*System.out.print("Please enter the group you would like to upload to: ");
+                 String grp = input.nextLine();*/
+                success = fileClient.upload(src, dest, group_work, token);
+                if(success) {
                     System.out.println("Upload successful!");
                 } else {
                     System.out.print("Upload unsuccessful, try again? (y/n): ");
@@ -410,11 +415,11 @@ public class ClientApp
             ArrayList<String> allFiles = (ArrayList<String>)fileClient.listFiles(token);
             for(String file : allFiles) {
                 System.out.println(file);
-            }            
+            }
         }
         System.out.println("Returning to main menu...");
     }
-
+    
     public static void printGroups()
     {
         List<String> groups = token.getGroups();
@@ -424,7 +429,7 @@ public class ClientApp
             int i = 0;
             for(; i < groups.size(); i++)
             {
-               System.out.println(""+ (i+1) + ". " + groups.get(i));
+                System.out.println(""+ (i+1) + ". " + groups.get(i));
             }
         }
         else
@@ -448,7 +453,7 @@ public class ClientApp
         }
         System.out.println("Going back to main menu............................................\n");
     }
-
+    
     public static void checkIdentity()
     {
         token = groupClient.getToken(username);
@@ -456,11 +461,28 @@ public class ClientApp
         {
             System.out.println("Sorry, you have been deleted from the system by Administrator. You are forced to exit");
             groupClient.disconnect();
-            fileClient.disconnect();
+            if(fileClient.isConnected()) fileClient.disconnect();
             input.close();
             System.exit(0);
         }
-
+        
     }
     
+    public static void changeGroup()
+    {
+        printGroups();
+        if(token.getGroups().size() != 0)
+        {
+            while(true)
+            {
+                System.out.println("Please enter the number of your desired group");
+                choice = input.nextInt();
+                if(choice > 0 || choice < (token.getGroups().size() + 1))
+                {
+                    group_work = token.getGroups().get(choice - 1);
+                    break;
+                }
+            }
+        }
+    }
 }
