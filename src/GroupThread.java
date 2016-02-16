@@ -53,6 +53,30 @@ public class GroupThread extends Thread
 						output.writeObject(response);
 					}
 				}
+				if(message.getMessage().equals("GET_SUBSET"))//Client wants a token
+				{
+					String username = (String)message.getObjContents().get(0); //Get the username
+					ArrayList<String> subset = null;
+					//@SuppressWarnings("unchecked");
+					if(message.getObjContents().get(1) != null) {					    
+					    subset = (ArrayList<String>)message.getObjContents().get(1);
+				    }
+					if(username == null || subset == null)
+					{
+						response = new Envelope("FAIL");
+						response.addObject(null);
+						output.writeObject(response);
+					}
+					else
+					{
+						UserToken yourToken = createToken(username, subset); //Create a token
+						
+						//Respond to the client. On error, the client will receive a null token
+						response = new Envelope("OK");
+						response.addObject(yourToken);
+						output.writeObject(response);
+					}
+				}
 				else if(message.getMessage().equals("CUSER")) //Client wants to create a user
 				{
 					if(message.getObjContents().size() < 2)
@@ -284,7 +308,25 @@ public class GroupThread extends Thread
 		}
 	}
 	
-	
+	private UserToken createToken(String username, ArrayList<String> subset) 
+	{
+		//Check that user exists
+		if(my_gs.userList.checkUser(username))
+		{
+			//Issue a new token with server's name, user's name, and user's groups
+			for(String group : subset) {
+			    if(!my_gs.userList.getUserGroups(username).contains(group)) {
+			        subset.remove(subset.indexOf(group));
+			    }
+			}
+			UserToken yourToken = new Token(my_gs.name, username, subset);
+			return yourToken;
+		}
+		else
+		{
+			return null;
+		}
+	}
 	//Method to create a user
 	private boolean createUser(String username, UserToken yourToken)
 	{

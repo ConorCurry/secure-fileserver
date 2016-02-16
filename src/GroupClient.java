@@ -16,7 +16,7 @@ public class GroupClient extends Client implements GroupClientInterface {
 			//Tell the server to return a token.
 			message = new Envelope("GET");
 			message.addObject(username); //Add user name string
-			//output.reset();
+			output.reset();
 			output.writeObject(message);
 		
 			//Get the response from the server
@@ -43,10 +43,48 @@ public class GroupClient extends Client implements GroupClientInterface {
 			System.err.println("Error: " + e.getMessage());
 			e.printStackTrace(System.err);
 			return null;
-		}
-		
+		}		
 	 }
-	 
+ 	 
+ 	 public UserToken getToken(String username, ArrayList<String> groups)
+	 {
+		try
+		{
+			UserToken token = null;
+			Envelope message = null, response = null;
+		 		 	
+			//Tell the server to return a token.
+			message = new Envelope("GET_SUBSET");
+			message.addObject(username); //Add user name string
+			message.addObject(groups);
+			output.writeObject(message);
+		
+			//Get the response from the server
+			response = (Envelope)input.readObject();
+			
+			//Successful response
+			if(response.getMessage().equals("OK"))
+			{
+				//If there is a token in the Envelope, return it 
+				ArrayList<Object> temp = null;
+				temp = response.getObjContents();
+				
+				if(temp.size() == 1)
+				{
+					token = (UserToken)temp.get(0);
+					return token;
+				}
+			}
+			
+			return null;
+		}
+		catch(Exception e)
+		{
+			System.err.println("Error: " + e.getMessage());
+			e.printStackTrace(System.err);
+			return null;
+		}		
+	 }
 	 public boolean createUser(String username, UserToken token)
 	 {
 		 try
