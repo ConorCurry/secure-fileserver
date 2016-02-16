@@ -272,8 +272,8 @@ public class ClientApp
             System.out.println();
             System.out.print("Please Enter the group name which you would like to see all the members: ");
             String groupName = input.nextLine();
-            List<String> members = new ArrayList<String>(groupClient.listMembers(groupName, token));
-            if(members != null)
+            List<String> members = groupClient.listMembers(groupName, token);
+            if(members != null && !members.isEmpty())
             {
                 System.out.println("\nCongratulations! You have fetched all the memers from the group " + groupName + " successfully!");
                 System.out.println("Start to list");
@@ -358,5 +358,4 @@ public class ClientApp
         }
         System.out.println("Going back to main menu............................................\n");
     }
-    
 }
