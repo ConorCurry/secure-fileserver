@@ -62,6 +62,7 @@ public class ClientApp
     public static void printGroupMenu()
     {
         
+        //retake tokens each time in case changes made by others.
         System.out.println("\nMain Menu: ");
         System.out.println("------------Please choose the number of what you want to do from the following options-------\n");
         System.out.println("1. Create User");
@@ -76,11 +77,13 @@ public class ClientApp
         System.out.println("10. Download file");
         System.out.println("11. Upload file");
         System.out.println("12. List all accessible files");
-        System.out.println("13. Disconnect from the server and exit the application");
+        System.out.println("13. List the groups you belong to");
+        System.out.println("14. Disconnect from the server and exit the application");
         System.out.print("\nPlease enter your choice: ");
         
         //check whether the choice is valid
         while(true){
+            checkIdentity();
             try
             {
                 choice = input.nextInt();
@@ -90,7 +93,7 @@ public class ClientApp
                 System.out.println("Sorry, Your choice is not valid, please enter a valid number.");
                 continue;
             }
-            if(choice < 1 || choice > 13)
+            if(choice < 1 || choice > 14)
             {
                 System.out.println("Sorry, Your choice is not valid, please enter a valid number.");
             }
@@ -146,6 +149,10 @@ public class ClientApp
                 
             case 12:
                 listFiles();
+                break;
+
+            case 13:
+                printGroups();
                 break;
                 
             default:
@@ -400,6 +407,24 @@ public class ClientApp
         }
         System.out.println("Returning to main menu...");
     }
+
+    public static void printGroups()
+    {
+        List<String> groups = token.getGroups();
+        if(groups != null && groups.size() != 0)
+        {
+            System.out.println("Here are your groups");
+            int i = 0;
+            for(; i < groups.size(); i++)
+            {
+               System.out.println(""+ (i+1) + ". " + groups.get(i));
+            }
+        }
+        else
+        {
+            System.out.println("Sorry. You don't belong to any group yet. Try to be in group first!");
+        }
+    }
     
     public static void end()
     {
@@ -409,10 +434,26 @@ public class ClientApp
         if(choice == 1)
         {
             groupClient.disconnect();
+            fileClient.disconnect();
             System.out.println("You have disconnected from the server successfully! Exiting the application!");
             input.close();
             System.exit(0);
         }
         System.out.println("Going back to main menu............................................\n");
     }
+
+    public static void checkIdentity()
+    {
+        token = groupClient.getToken(username);
+        if(token == null)
+        {
+            System.out.println("Sorry, you have been deleted from the system by Administrator. You are forced to exit");
+            groupClient.disconnect();
+            fileClient.disconnect();
+            input.close();
+            System.exit(0);
+        }
+
+    }
+    
 }
