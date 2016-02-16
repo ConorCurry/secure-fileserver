@@ -483,7 +483,7 @@ public class ClientApp
         {
             while(true)
             {
-                System.out.print("Please enter the number of your desired group");
+                System.out.print("Please enter the number of your desired group: ");
                 choice = input.nextInt();
                 input.nextLine();
                 if(choice > 0 || choice < (token.getGroups().size() + 1))
