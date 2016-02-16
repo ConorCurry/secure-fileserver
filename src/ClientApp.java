@@ -98,7 +98,7 @@ public class ClientApp
                 System.out.println("Sorry, Your choice is not valid, please enter a valid number.");
                 continue;
             }
-            if(choice >= 0 && choice < 14 && choice > 9 && !fileClient.isConnected()) {
+            if(choice >= 0 && choice < 14 && choice > 10 && !fileClient.isConnected()) {
                 System.out.println("Invalid option while not connected to a fileserver");
                 continue;
             }
