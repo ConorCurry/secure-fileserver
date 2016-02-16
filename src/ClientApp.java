@@ -273,7 +273,7 @@ public class ClientApp
             System.out.print("Please Enter the group name which you would like to see all the members: ");
             String groupName = input.nextLine();
             List<String> members = groupClient.listMembers(groupName, token);
-            if(members != null)
+            if(members != null && !members.isEmpty())
             {
                 System.out.println("\nCongratulations! You have fetched all the memers from the group " + groupName + " successfully!");
                 System.out.println("Start to list");
@@ -333,11 +333,58 @@ public class ClientApp
     }
     
     public static void downloadFile() {
-    
+        System.out.print("You've chosen to download a file. Press 1 to continue, or another number to return to the menu. ");
+        choice = input.nextInt();
+        input.nextLine();
+        if(choice == 1)
+        {
+            boolean success = false;
+            do {
+                System.out.print("Please enter source file path: ");
+                String src = input.nextLine();
+                System.out.print("Please enter your destination file path: ");
+                String dest = input.nextLine();
+                success = download(src, dest, token);
+                if(success) {
+                    System.out.println("Download successful!");
+                } else {
+                    System.out.print("Download unsuccessful, try again? (y/n): ");
+                    if(input.nextLine().equals("n")) {
+                        break;
+                    }
+                }
+            } while(!success);
+        }
+        System.out.println("Returning to main menu...");
     }
     
     public static void uploadFile() {
-    
+        System.out.print("You've chosen to upload a file. Press 1 to continue, or another number to return to the menu. ");
+        choice = input.nextInt();
+        input.nextLine();
+        if(choice == 1)
+        {
+            boolean success = false;
+            do {
+                System.out.print("Please enter source file path: ");
+                String src = input.nextLine();
+                System.out.print("Please enter your destination file path: ");
+                String dest = input.nextLine();
+                System.out.print("Please enter the group you would like to upload to: ");
+                String grp = input.nextLine();
+                success = download(src, dest, ,grp, token);
+            if(success) {
+                    System.out.println("Upload successful!");
+                } else {
+                    System.out.print("Upload unsuccessful, try again? (y/n): ");
+                    if(input.nextLine().equals("n")) {
+                        break;
+                    }
+                }
+            } while(!success);
+        }
+        System.out.println("Returning to main menu...");
+    }
     }
     
     public static void listFiles() {
