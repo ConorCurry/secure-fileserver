@@ -98,10 +98,6 @@ public class ClientApp
                 System.out.println("Sorry, Your choice is not valid, please enter a valid number.");
                 continue;
             }
-            if(choice >= 0 && choice < 14 && choice > 10 && !fileClient.isConnected()) {
-                System.out.println("Invalid option while not connected to a fileserver");
-                continue;
-            }
             if(choice < 0 || choice > 14)
             {
                 System.out.println("Sorry, Your choice is not valid, please enter a valid number.");
@@ -492,7 +488,7 @@ public class ClientApp
                 System.out.print("Please enter the number of your desired group: ");
                 choice = input.nextInt();
                 input.nextLine();
-                if(choice > 0 || choice < (token.getGroups().size() + 1))
+                if(choice > 0 && choice < (token.getGroups().size() + 1))
                 {
                     group_work = token.getGroups().get(choice - 1);
                     break;
