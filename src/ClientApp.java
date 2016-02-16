@@ -54,9 +54,8 @@ public class ClientApp
         } while(token == null);
         
         System.out.printf("Welcome %s!\n", username);
+        changeGroup();
         while(true) {
-            printGroups();
-            changeGroup();
             printGroupMenu();
         }
     }
