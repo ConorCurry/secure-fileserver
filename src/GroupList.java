@@ -72,7 +72,10 @@ import java.util.*;
         
         public synchronized boolean checkOwnership(String user, String groupname)
         {
-            return list.get(groupname).getOwners().contains(user);
+            if(list.get(groupname) != null)
+            	return list.get(groupname).getOwners().contains(user);
+
+            return false;
         }
 		
 		

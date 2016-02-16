@@ -9,6 +9,7 @@ USAGE:
  run on port 8765, but a custom port can be passed as the first command line
  argument.
 
+
  To start the File Server: java RunFileServer [(optional) port number]
  The file server will create a shared_files inside the working directory if one 
  does not exist. The file server is now online.  The file server will by default
@@ -21,3 +22,12 @@ USAGE:
  
  Note that this implementation supports server side directories.
 
+ To run the client application: java ClientApp
+ This client will connect to the group server by specifying the name and also the port number consistent with the one for the group server.
+ The username will be asked for log in.
+ The user will be shown a list of their groups and also choose the one they would like to work on.
+ The main menu will be poped up, and a list of operations for group server will be shown.
+ If the user would like to work on file server as well, the user can start file client by the corresponding option.
+ And the submenu of the file server will be shown.
+ If the user would like to double check their groups, they can list groups anytime. And also, they can change the working group whenever they like.
+ The user will exit the application if they would like to. 
