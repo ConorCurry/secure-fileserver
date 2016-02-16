@@ -90,7 +90,6 @@ public class GroupServer extends Server {
 
 			while(true)
 			{
-				System.out.println("Waiting for connections");
 				sock = serverSock.accept();
 				thread = new GroupThread(sock, this);
 				thread.start();
