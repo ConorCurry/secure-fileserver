@@ -275,6 +275,7 @@ public class ClientApp
         if(choice == 1)
         {
             System.out.println();
+            token = groupClient.getToken(username);
             System.out.print("Please Enter the group name which you would like to see all the members: ");
             String groupName = input.nextLine();
             List<String> members = groupClient.listMembers(groupName, token);
@@ -403,12 +404,18 @@ public class ClientApp
     }
     
     public static void listFiles() {
+        System.out.print("You have chosen to list files. Press 1 to continue. Press another number to go back to main menu: ");
+        choice = input.nextInt();
+        input.nextLine();
         if(!fileClient.isConnected()) {
             System.out.println("You must be connected to a fileserver to list files");
         }
         if(choice == 1)
         {
             ArrayList<String> allFiles = (ArrayList<String>)fileClient.listFiles(token);
+            if(allFiles.isEmpty())
+                System.out.println("Sorry, You did not have any file now\n");
+
             for(String file : allFiles) {
                 System.out.println(file);
             }
@@ -418,6 +425,7 @@ public class ClientApp
     
     public static void printGroups()
     {
+        token = groupClient.getToken(username);
         List<String> groups = token.getGroups();
         if(groups != null && groups.size() != 0)
         {
@@ -471,8 +479,9 @@ public class ClientApp
         {
             while(true)
             {
-                System.out.println("Please enter the number of your desired group");
+                System.out.print("Please enter the number of your desired group");
                 choice = input.nextInt();
+                input.nextLine();
                 if(choice > 0 || choice < (token.getGroups().size() + 1))
                 {
                     group_work = token.getGroups().get(choice - 1);
