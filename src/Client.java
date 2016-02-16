@@ -18,7 +18,6 @@ public abstract class Client {
 		try{
 			@SuppressWarnings("resource")
 			Socket sock = new Socket(server, port); //connect to the server
-			System.out.println("connected to" + server + "on port" + port);
 			output = new ObjectOutputStream(sock.getOutputStream());
 			input = new ObjectInputStream(sock.getInputStream());
 			return true;
