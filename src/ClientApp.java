@@ -72,10 +72,11 @@ public class ClientApp
         System.out.println("6. Delete User From Group");
         System.out.println("7. List members of a group");
         System.out.println("8. Modify fileserver connection");
-        System.out.println("9. Download file");
-        System.out.println("10. Upload file");
-        System.out.println("11. List all accessible files");
-        System.out.println("12. Disconnect from the server and exit the application");
+        System.out.println("9. Delete file");
+        System.out.println("10. Download file");
+        System.out.println("11. Upload file");
+        System.out.println("12. List all accessible files");
+        System.out.println("13. Disconnect from the server and exit the application");
         System.out.print("\nPlease enter your choice: ");
         
         //check whether the choice is valid
@@ -89,7 +90,7 @@ public class ClientApp
                 System.out.println("Sorry, Your choice is not valid, please enter a valid number.");
                 continue;
             }
-            if(choice < 1 || choice > 12)
+            if(choice < 1 || choice > 13)
             {
                 System.out.println("Sorry, Your choice is not valid, please enter a valid number.");
             }
@@ -344,7 +345,7 @@ public class ClientApp
                 String src = input.nextLine();
                 System.out.print("Please enter your destination file path: ");
                 String dest = input.nextLine();
-                success = download(src, dest, token);
+                success = fileClient.download(src, dest, token);
                 if(success) {
                     System.out.println("Download successful!");
                 } else {
@@ -372,7 +373,7 @@ public class ClientApp
                 String dest = input.nextLine();
                 System.out.print("Please enter the group you would like to upload to: ");
                 String grp = input.nextLine();
-                success = download(src, dest, ,grp, token);
+                success = fileClient.upload(src, dest, grp, token);
             if(success) {
                     System.out.println("Upload successful!");
                 } else {
@@ -385,10 +386,19 @@ public class ClientApp
         }
         System.out.println("Returning to main menu...");
     }
-    }
     
     public static void listFiles() {
-    
+        System.out.print("You've chosen to list files. Press 1 to continue, or another number to return to the menu. ");
+        choice = input.nextInt();
+        input.nextLine();
+        if(choice == 1)
+        {
+            ArrayList<String> allFiles = (ArrayList<String>)fileClient.listFiles(token);
+            for(String file : allFiles) {
+                System.out.println(file);
+            }            
+        }
+        System.out.println("Returning to main menu...");
     }
     
     public static void end()
