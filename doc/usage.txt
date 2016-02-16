@@ -9,34 +9,6 @@ USAGE:
  run on port 8765, but a custom port can be passed as the first command line
  argument.
 
- To start clients for Group Server, java GroupClientApp [(optional) port number]
- If you put a port number when you start your Group Server, then it is necessary to 
- put the same port number you put for your server. Otherwise, the port number is the  
- default port number set in the code. 
-
- Operations and How to evoke:
- 1. Connect(): if you run the GroupClientApp, the connection will be opened automatically.
-
- 2. getToken(): once you open the client, the application will ask for your username and crate a token for you.
-
- If you do not get a valid option, you cannot continue. The connection will be interrupted, and the application will be shut down. Once you have the token, you are able to do the following operations if you put the corresponding number of the menu shown:
-
- 3. createUser(): if you press 1, and you are the member of “ADMIN”, you can create a new user by inputting the username for that user. Otherwise, you will fail to do so and return to the main menu.
-
- 4. deleteUser(): if you press 2, and you are the member of “ADMIN”, you can delete a user by inputting the username for that user. Otherwise, you will fail to do so and return to the main menu.
-
- 5. createGroup(): if you press 3, you are able to create a new group by inputting the name of your group. You will fail to do so if the group already exists.
-
- 6. deleteGroup(): if you press 4, you are able to delete a group by inputting the name of your group. You will fail to do so if the group does not exists.
-
- 7. addUserToGroup(): if you press 5, you will be able to add a user to a group by putting the name of that user also the name of group. If you fail to do so, you will be returned to the main menu.
-
- 8. deleteUserFromGroup(): if you press 6, you will be able to delete a user from a group by putting the name of that user also the name of group. If you fail to do so, you will be returned to the main menu.
-
- 9. listMembers(): if you press 7, you will be able to list all the members of a group by inputting the name of that group. If you fail to do so, you will be returned to the main menu.
-
- 10. disconnect(): if you press 8, you will disconnect from the server, and the application will be shut down automatically.
-
 
  To start the File Server: java RunFileServer [(optional) port number]
  The file server will create a shared_files inside the working directory if one 
@@ -50,3 +22,12 @@ USAGE:
  
  Note that this implementation supports server side directories.
 
+ To run the client application: java ClientApp
+ This client will connect to the group server by specifying the name and also the port number consistent with the one for the group server.
+ The username will be asked for log in.
+ The user will be shown a list of their groups and also choose the one they would like to work on.
+ The main menu will be poped up, and a list of operations for group server will be shown.
+ If the user would like to work on file server as well, the user can start file client by the corresponding option.
+ And the submenu of the file server will be shown.
+ If the user would like to double check their groups, they can list groups anytime. And also, they can change the working group whenever they like.
+ The user will exit the application if they would like to. 
