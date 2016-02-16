@@ -177,7 +177,7 @@ public class GroupThread extends Thread
 								String groupname = (String)message.getObjContents().get(0); //Extract the group
 								UserToken yourToken = (UserToken)message.getObjContents().get(1); //Extract the token
 								
-								List<String> returnedMember = new ArrayList<String>(listMembers(groupname, yourToken));
+								List<String> returnedMember = listMembers(groupname, yourToken);
 
 								if(returnedMember != null)
 								{
