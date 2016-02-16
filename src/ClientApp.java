@@ -235,9 +235,9 @@ public class ClientApp
         {
             System.out.print("Please Enter the Username to be added: ");
             String userName = input.nextLine();
-            //System.out.print("Please Enter the group name you would like to add: ");
-            //String groupName = input.nextLine();
-            if(groupClient.addUserToGroup(userName, group_work, token))
+            System.out.print("Please Enter the group name you would like to add: ");
+            String groupName = input.nextLine();
+            if(groupClient.addUserToGroup(userName, groupName, token))
                 System.out.println("Congratulations! You have added the user " + userName +" to the group " + group_work + " successfully!");
             else
                 System.out.println("Sorry. You fail to add this user to the group. Please try other options.");
@@ -256,9 +256,9 @@ public class ClientApp
             System.out.println();
             System.out.print("Please Enter the Username to be deleted: ");
             String userName = input.nextLine();
-            //System.out.print("Please Enter the group name which the user belongs to: ");
-            //String groupName = input.nextLine();
-            if(groupClient.deleteUserFromGroup(userName, group_work, token))
+            System.out.print("Please Enter the group name which the user belongs to: ");
+            String groupName = input.nextLine();
+            if(groupClient.deleteUserFromGroup(userName, groupName, token))
                 System.out.println("\nCongratulations! You have deleted the user " + userName +" from the group " + group_work + " successfully!");
             else
                 System.out.println("\nSorry. You fail to delete this user from the group. Please try other options.");
@@ -387,9 +387,9 @@ public class ClientApp
                 String src = input.nextLine();
                 System.out.print("Please enter your destination file path: ");
                 String dest = input.nextLine();
-                /*System.out.print("Please enter the group you would like to upload to: ");
-                 String grp = input.nextLine();*/
-                success = fileClient.upload(src, dest, group_work, token);
+                System.out.print("Please enter the group you would like to upload to: ");
+                String grp = input.nextLine();
+                success = fileClient.upload(src, dest, grp, token);
                 if(success) {
                     System.out.println("Upload successful!");
                 } else {
