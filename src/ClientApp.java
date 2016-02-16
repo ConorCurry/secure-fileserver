@@ -63,13 +63,6 @@ public class ClientApp
     {
         
         //retake tokens each time in case changes made by others.
-        token = groupClient.getToken(username);
-        if(token == null)
-        {
-            System.out.println("Sorry, you have been deleted from the system by Administrator. You are forced to exit");
-            end();
-        }
-        
         System.out.println("\nMain Menu: ");
         System.out.println("------------Please choose the number of what you want to do from the following options-------\n");
         System.out.println("1. Create User");
@@ -89,6 +82,7 @@ public class ClientApp
         
         //check whether the choice is valid
         while(true){
+            checkIdentity();
             try
             {
                 choice = input.nextInt();
@@ -369,6 +363,20 @@ public class ClientApp
             System.exit(0);
         }
         System.out.println("Going back to main menu............................................\n");
+    }
+
+    public static void checkIdentity()
+    {
+        token = groupClient.getToken(username);
+        if(token == null)
+        {
+            System.out.println("Sorry, you have been deleted from the system by Administrator. You are forced to exit");
+            groupClient.disconnect();
+            fileClient.disconnect();
+            input.close();
+            System.exit(0);
+        }
+
     }
     
 }
