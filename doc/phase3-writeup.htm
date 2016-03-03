@@ -38,19 +38,9 @@ your group has decided to use to address threats T1â€“T4.</p>
       <h2>Threat T1: Unauthorized Token Issuance</h2>
 <!-- BEGIN CHANGES HERE -->
 
-<p>Begin this section by describing threat T1. This may include describing
-examples of the threat being exploited by an adversary, a short discussion of
-why this threat is problematic and needs to be addressed, and/or diagrams
-showing how the threat might manifest in your groupâ€™s insecure
-implementation.</p>
+<p>A user needs to acquire a token to access the group server and the file server as well. However, it is not trustworthy that everyone who acquires the token is an authroized user. The system developed in phase 2 only needs a username to get a token from the group user, which is insesure because anyone can get that token as long as they know the username. If an adversary can know the username, he/she could access all the information related to that user stored on the group server and also all the files accessible to that username. As a result, the authentication of the user should be deployed before a token is issued. Also, the adversary can be a man in the middle, pretends to be the server and gets the messages passed from the user to the server, and then uses that information to pretend to be the user. Thus, it is also necessary for the system to authenticate the identify of the server during the process.</p>
 
-<p>Next, provide a short description of the mechanism that you chose to
-implement to protect against this threat. For interactive protocols, it would be
-helpful to provide a diagram explaining the messages exchanged between
-participating principals (use html &lt;img&gt; tag to import such images). Be
-sure to explain any cryptographic choices that your group makes: What types of
-algorithms, modes of operation, and/or key lengths did you choose? Why? If
-shared keys are needed, how are they exchanged?</p>
+<p>The proposed mechanisms are password mechanism. </p>
 
 <p>Finally, provide a short argument addressing why your proposed mechanism
 sufficiently addresses this particular threat. This argument should address the
