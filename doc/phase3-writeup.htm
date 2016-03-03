@@ -56,8 +56,11 @@ As a result, the user will get g^b (mod q) and calculate g^(ab) (mod q) as the s
       <h2>Threat T2: Token Modification/Forgery</h2>
 <!-- BEGIN CHANGES HERE -->
 
-<p>Repeat the steps as for Threat T1.</p>
+<p>The adversary might modify or forge tokes issused by the Group Server, and use those invalid tokens to access the files that they shouldn't have the privilege to see. Also, the information embedded in the user might be changed the malicous users to access the group information that they are not members of that group, to access the file server with that modified message.</p>
 
+<p> In order to assure the unchanged information inside the token, digital signature will be used to valid the token. When the server assigns the token to the user, it should sign every field of that token with its private key. Then, when the user sends requests to the file server, the file server will asks for the token, and verify all the field of the token with the server's public key.</p>
+
+<p>This mechanism is secure because only the server, the owner of the private key, can sign the message. If the user changes any information of that token, or the adversary forged one token, they can't create the digital signature because they don't know the server's private key. If they sign that message with a guessed private key, the file server, or the third-party, can find out that the message can't be verified. That is, one or more fields are changed, and the token is no longer valid.</p>
 <!-- END CHANGES HERE -->
     </section>
     <section id="threat3">
