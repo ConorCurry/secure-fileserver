@@ -67,7 +67,15 @@ As a result, the user will get g^b (mod q) and calculate g^(ab) (mod q) as the s
       <h2>Threat T3: Unauthorized File Servers</h2>
 <!-- BEGIN CHANGES HERE -->
 
-<p>Repeat the steps as for Threat T1.</p>
+<p>We must be assured that unauthorized file servers may not pose as legitimate servers. An illegitimate file server is a very serious security vulnerability, as it could easily perform man-in-the-middle attacks by impersonating the file server to the user, and impersonating the user to the file server. This would allow it to not only corrupt files, but modify them in transit, or even completely fabricate them. It would also break confidentiality by being able to see what files the user is requesting from the group server. It also would obviously be able to steal user tokens that were issued by the group server, seriously compromising user security.</p>
+<p>The method we will use to confront these issues, and to properly authenticate the file server rely on a hybrid approach involving RSA’s public key cryptography, and AES symmetric keys. We will use highly secure key sizes (3072-bit RSA and 256-bit AES). The authentication between the user and file server will not leak information if trying to authenticate an unauthorized file server, and will be resistant to reflection attacks and man in the middle attacks. This protocol requires that the user is confident that they know the authentic file server’s public key before initiating the procedure. The authorization procedure is as follows:</p>
+<p>The user’s cryptographic material includes the ticket (including ticket signature from the group server) for the user. This needs to remain secret to all except the user, group server, and authentic file servers. The user will also have a RSA keypair. </p>
+<p>The file server’s cryptographic material also includes an RSA keypair. It will also have access to the group server’s public key, and will be expected to be able to create 256-bit securely random AES keys. </p>
+<p>The authentication procedure begins with the user initiating a connection with the file server, and sending a secure random number, the user’s ticket (including signature), all encrypted with the server’s public key. This is concatenated with the user’s public key.</p>
+<p>If authentic, the file server will be able to decrypt the random number and ticket material. The signed ticket will prove to the file server the authenticity of the user. Upon verification, and using the user’s provided public key, the file server will encrypt the user’s random number concatenated with a randomly generated AES256 key.</p>
+<p>The user will then decrypt this message, and check equality of the provided random number with their own. If they match, this proves the validity of the file server to the user, and the two will be able to begin secured communication of messages and files using the provided AES256 session key.</p>
+<p>As long as the user has access to the file server’s public key ahead of time, the server will be able to prove it’s authenticity using the random number challenge, and the server is able to authenticate the user, by commutativity. This is because the user has possession of a group server token, which means that the group server was able to properly perform entity authentication for the user.</p>
+
 
 <!-- END CHANGES HERE -->
     </section>
@@ -75,7 +83,10 @@ As a result, the user will get g^b (mod q) and calculate g^(ab) (mod q) as the s
       <h2>Threat T4: Information Leakage via Passive Monitoring</h2>
 <!-- BEGIN CHANGES HERE -->
 
-<p>Repeat the steps as for Threat T1.</p>
+<p>Passive monitoring can easily break confidentiality guarantees that we want to provide. Information about the users’ identities, tokens, and files are all vulnerable to passive monitoring. AES256 symmetric key cryptography will be the method we use to provide secure communication channels. These keys will be shared via already described authentication procedures, and will allow for computationally efficient secure communication (as opposed to attempting to encrypt large files with RSA).</p>
+<p>We will use AES256 in OFB mode to secure the required message and file communication. OFB mode is useful for allowing precomputation of the encryption, which will allow speedy file access from the server, and reduces redundant recomputation of encryption. This will help reduce load and prevent denial of service attacks against file servers. These session keys are shared in the authentication procedure between the respective server and the user, and are randomly generated each time a authenticates. This will prevent attacks resulting from key overuse. </p>
+<p>Because the AES keys are shared during secure authentication, only the user and the server will be able to decrypt the messages and files sent between them. This will successfully address the problem of passive monitoring, by creating a secure tunnel for communication between the user and server.</p>
+
 
 <!-- END CHANGES HERE -->
     </section>
