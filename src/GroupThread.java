@@ -428,23 +428,20 @@ public class GroupThread extends Thread
 		//Does requester exist?
 		if(my_gs.userList.checkUser(requester))
 		{
-			ArrayList<String> temp = my_gs.groupList.getGroupOwners(groupname);
-			//requester needs to be group owner
-			if(temp.contains(requester))
+			//does the requested group exist?
+			if(my_gs.groupList.checkGroup(groupname))
 			{
-				//Does group exist?
-				if(my_gs.groupList.checkGroup(groupname))
+				//does the requested group is owned by the user?
+				if(my_gs.groupList.checkOwnership(requester, groupname))
 				{
-				
-				    //loop through all users, removing the group from each one
-                    for(String member: my_gs.groupList.getMembers(groupname)) {
-					    my_gs.userList.removeGroup(member, groupname);
+					//loop through all users, removing the group from each one
+	                for(String member: my_gs.groupList.getMembers(groupname)) {
+						my_gs.userList.removeGroup(member, groupname);
 					}
-					
-					
+						
 					//If groups are owned, remove references to ownership
 					ArrayList<String> deleteGroupOwnership = my_gs.groupList.getGroupOwners(groupname);
-				    
+					    
 					for(String username : deleteGroupOwnership)
 					{
 						my_gs.userList.removeOwnership(username, groupname);
@@ -452,18 +449,17 @@ public class GroupThread extends Thread
 					
 					//Delete the group from the group list
 					my_gs.groupList.deleteGroup(groupname);
-					
+						
 					return true;	
 				}
 				else
 				{
-					return false; //Group does not exist
-					
+						return false; //requester does not own the group 
 				}
 			}
 			else
 			{
-				return false; //requester is not an owner
+				return false //the requested group does not exist 
 			}
 		}
 		else
