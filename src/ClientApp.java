@@ -282,11 +282,12 @@ public class ClientApp
             token = groupClient.getToken(username);
             System.out.print("Please Enter the group name which you would like to see all the members: ");
             String groupName = input.nextLine();
-            List<String> members = (List<String>)groupClient.listMembers(groupName, token);
+            List<String> members = groupClient.listMembers(groupName, token);
             if(members != null && !members.isEmpty())
             {
                 System.out.println("\nCongratulations! You have fetched all the memers from the group " + groupName + " successfully!");
                 System.out.println("Start to list");
+                members = new ArrayList<String>(groupClient.listMembers(groupName, token));
                 for(int i = 0; i < members.size(); i++)
                 {
                     System.out.println(""+ (i+1) + ". " + members.get(i));
