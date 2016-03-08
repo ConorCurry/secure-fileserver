@@ -55,6 +55,8 @@ public class ClientApp
         } while(masterToken == null);
         
         System.out.printf("Welcome %s!\n", username);
+		input.nextLine();
+		input.nextLine();
         changeGroups();
         while(true) {
             printGroupMenu();
@@ -93,6 +95,7 @@ public class ClientApp
             try
             {
                 choice = input.nextInt();
+				input.nextLine();
             }
             catch(Exception e)
             {
@@ -105,7 +108,7 @@ public class ClientApp
             }
             else break;
         }
-        input.nextLine();
+        //input.nextLine();
         
         switch(choice){
             case 0:
@@ -426,8 +429,7 @@ public class ClientApp
     
     public static void printGroups()
     {
-        token = groupClient.getToken(username);
-        List<String> groups = token.getGroups();
+        ArrayList<String> groups = new ArrayList<>(token.getGroups());
         if(groups != null && groups.size() != 0)
         {
             System.out.println("Here are your groups");
@@ -445,8 +447,11 @@ public class ClientApp
     
     public static void printGroups(UserToken workingtoken)
     {
-        workingtoken = groupClient.getToken(username);
-        List<String> groups = workingtoken.getGroups();
+        if(workingtoken == null) {
+			System.out.println("Invalid token");
+			return;
+		}
+		ArrayList<String> groups = new ArrayList<>(workingtoken.getGroups());
         if(groups != null && groups.size() != 0)
         {
             System.out.println("Here are your groups");
@@ -455,9 +460,7 @@ public class ClientApp
             {
                 System.out.println(""+ (i+1) + ". " + groups.get(i));
             }
-        }
-        else
-        {
+        } else {
             System.out.println("Sorry. You don't belong to any group yet. Try to be in group first!");
         }
     }
@@ -480,7 +483,7 @@ public class ClientApp
     
     public static void checkIdentity()
     {
-        token = groupClient.getToken(username);
+        //token = groupClient.getToken(username);
         if(token == null)
         {
             System.out.println("Sorry, you have been deleted from the system by Administrator. You are forced to exit");
@@ -494,18 +497,37 @@ public class ClientApp
     
     public static void changeGroups()
     {
+		masterToken = groupClient.getToken(username);
         printGroups(masterToken);
-        if(masterToken.getGroups().size() != 0)
+		if(masterToken == null) {
+			return;
+		}
+        if(masterToken.getGroups().size() > 0)
         {
-            System.out.print("Please enter the numbers of your desired groups, separated by spaces");
+            System.out.println("Please enter the numbers of your desired groups, separated by spaces. \nWhen you are finished, type a 'done' and press enter.");
             ArrayList<String> groups = new ArrayList<String>();
             while(input.hasNextInt()) {
                 choice = input.nextInt();
+				//input.nextLine();
                 if(choice > 0 || choice < (token.getGroups().size())) {
-                    groups.add(masterToken.getGroups().get(choice -1));
+                    groups.add(masterToken.getGroups().get(choice - 1));
                 }
             }
-            //call here to get new token
+			while(input.hasNext("\n")) { input.next(); }
+			input.nextLine();
+			System.out.println("Here are the group's you've selected:");
+
+			for(String group : groups) {
+				System.out.println(group);
+			}
+
+			System.out.println("Is this correct?");
+			if(input.nextLine().charAt(0) != ('y')) {
+				System.out.println("Returning to main menu...");
+				return;
+			}
+			token = groupClient.getToken(username, groups);
+			System.out.println("successfully updated token!");
         }
     }
 }

@@ -32,40 +32,44 @@ public class GroupThread extends Thread
 			{
 				Envelope message = (Envelope)input.readObject();
 				System.out.println("Request received: " + message.getMessage());
-				Envelope response;
+				Envelope response = null;
 				
 				if(message.getMessage().equals("GET"))//Client wants a token
 				{
-					String username = (String)message.getObjContents().get(0); //Get the username
+					String username = new String((String)message.getObjContents().get(0)); //Get the username
 					if(username == null)
 					{
 						response = new Envelope("FAIL");
+						
 						response.addObject(null);
-						output.writeObject(response);
-					}
-					else
-					{
+					} else {
 						UserToken yourToken = createToken(username); //Create a token
 						
 						//Respond to the client. On error, the client will receive a null token
-						response = new Envelope("OK");
-						response.addObject(yourToken);
-						output.writeObject(response);
+						if(yourToken != null) {
+							response = new Envelope("OK");
+						} else {
+							response = new Envelope("FAIL");
+						}
+					   	response.addObject(yourToken);
 					}
+			   		output.writeObject(response);
+				   	output.flush();
+					output.reset();
 				}
 				if(message.getMessage().equals("GET_SUBSET"))//Client wants a token
 				{
 					String username = (String)message.getObjContents().get(0); //Get the username
 					ArrayList<String> subset = null;
-					//@SuppressWarnings("unchecked");
-					if(message.getObjContents().get(1) != null) {					    
-					    subset = (ArrayList<String>)message.getObjContents().get(1);
+
+					//@SuppressWarnings("unchecked")
+					if(message.getObjContents().get(1) != null) {
+					    subset = new ArrayList<String>((ArrayList)message.getObjContents().get(1));
 				    }
 					if(username == null || subset == null)
 					{
 						response = new Envelope("FAIL");
 						response.addObject(null);
-						output.writeObject(response);
 					}
 					else
 					{
@@ -74,8 +78,10 @@ public class GroupThread extends Thread
 						//Respond to the client. On error, the client will receive a null token
 						response = new Envelope("OK");
 						response.addObject(yourToken);
-						output.writeObject(response);
 					}
+					output.writeObject(response);
+					output.flush();
+					output.reset();
 				}
 				else if(message.getMessage().equals("CUSER")) //Client wants to create a user
 				{
@@ -278,11 +284,11 @@ public class GroupThread extends Thread
 					socket.close(); //Close the socket
 					proceed = false; //End this communication loop
 				}
-				else
-				{
-					response = new Envelope("FAIL"); //Server does not understand client request
-					output.writeObject(response);
-				}
+				//else
+				//{
+				//	response = new Envelope("FAIL"); //Server does not understand client request
+				//	output.writeObject(response);
+				//}
 			}while(proceed);	
 		}
 		catch(Exception e)

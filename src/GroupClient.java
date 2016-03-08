@@ -16,20 +16,22 @@ public class GroupClient extends Client implements GroupClientInterface {
 			//Tell the server to return a token.
 			message = new Envelope("GET");
 			message.addObject(username); //Add user name string
-			output.reset();
+			//output.reset();
 			output.writeObject(message);
+			output.flush();
+			output.reset();
 		
 			//Get the response from the server
 			response = (Envelope)input.readObject();
 			
+			System.out.printf("Server response msg: %s\n", response.getMessage());
 			//Successful response
 			if(response.getMessage().equals("OK"))
 			{
 				//If there is a token in the Envelope, return it 
-				ArrayList<Object> temp = null;
-				temp = response.getObjContents();
+				ArrayList<Object> temp = response.getObjContents();
 				
-				if(temp.size() == 1)
+				if(temp != null && temp.size() == 1)
 				{
 					token = (UserToken)temp.get(0);
 					return token;
@@ -58,6 +60,7 @@ public class GroupClient extends Client implements GroupClientInterface {
 			message.addObject(username); //Add user name string
 			message.addObject(groups);
 			output.writeObject(message);
+			output.reset();
 		
 			//Get the response from the server
 			response = (Envelope)input.readObject();
