@@ -508,7 +508,7 @@ public class ClientApp
             while(input.hasNextInt()) {
                 choice = input.nextInt();
 				//input.nextLine();
-                if(choice > 0 && choice < (token.getGroups().size())) {
+                if(choice > 0 && choice < (token.getGroups().size() + 1)) {
                     groups.add(masterToken.getGroups().get(choice - 1));
                 }
             }

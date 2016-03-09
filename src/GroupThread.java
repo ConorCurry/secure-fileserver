@@ -342,7 +342,7 @@ public class GroupThread extends Thread
 		if(my_gs.userList.checkUser(requester))
 		{
 			//Get the user's groups
-			ArrayList<String> temp = my_gs.userList.getUserGroups(requester);
+			ArrayList<String> temp = new ArrayList<>(yourToken.getGroups());
 			//requester needs to be an administrator
 			if(temp.contains("ADMIN"))
 			{
@@ -376,7 +376,7 @@ public class GroupThread extends Thread
 		//Does requester exist?
 		if(my_gs.userList.checkUser(requester))
 		{
-			ArrayList<String> temp = my_gs.userList.getUserGroups(requester);
+			ArrayList<String> temp = new ArrayList<>(yourToken.getGroups());
 			//requester needs to be an administer
 			if(temp.contains("ADMIN"))
 			{
@@ -479,8 +479,8 @@ public class GroupThread extends Thread
 			//does the requested group exist?
 			if(my_gs.groupList.checkGroup(groupname))
 			{
-				//does the requested group is owned by the user?
-				if(my_gs.groupList.checkOwnership(requester, groupname))
+				//is the requested group owned by the user?
+				if(my_gs.groupList.checkOwnership(requester, groupname) && yourToken.getGroups().contains(groupname))
 				{
 					//loop through all users, removing the group from each one
 	                for(String member: my_gs.groupList.getMembers(groupname)) {
@@ -522,7 +522,7 @@ public class GroupThread extends Thread
 		String requester = yourtoken.getSubject();
 
 		//Whether this user is the owner of this group?
-		if(my_gs.groupList.checkOwnership(requester, group))
+		if(my_gs.groupList.checkOwnership(requester, group) && yourtoken.getGroups().contains(group))
 		{
             ArrayList<String> members = new ArrayList<String>(my_gs.groupList.getMembers(group));//have to create a new instanation
             return members;
@@ -543,7 +543,7 @@ public class GroupThread extends Thread
 			//get the list of group owned by requester
 			ArrayList<String> temp = my_gs.userList.getUserOwnership(requester);
 			
-			if(temp.contains(group))
+			if(temp.contains(group) && yourtoken.getGroups().contains(group))
 			{
 				if(my_gs.userList.checkUser(user))
 				{
@@ -584,7 +584,7 @@ public class GroupThread extends Thread
 			//get the list of group owned by requester
 			ArrayList<String> temp = my_gs.userList.getUserOwnership(requester);
 			
-			if(temp.contains(group))
+			if(temp.contains(group) && yourtoken.getGroups().contains(group))
 			{
 				if(my_gs.userList.checkUser(user))
 				{
