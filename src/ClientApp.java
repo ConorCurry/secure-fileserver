@@ -109,56 +109,65 @@ public class ClientApp
             else break;
         }
         //input.nextLine();
-        
-        switch(choice){
-            case 0:
+        masterToken = groupClient.getToken(username); //check whether this user does exist or not 
+        if(masterToken != null)
+        {
+            switch(choice){
+                case 0:
+                    end();
+                    break;
+                case 1:
+                    connectFileserver();
+                    break;
+                case 2:
+                    cuser();
+                    break;
+                case 3:
+                    duser();
+                    break;
+                case 4:
+                    cgroup();
+                    break;
+                case 5:
+                    dgroup();
+                    break;
+                case 6:
+                    addUser();
+                    break;
+                case 7:
+                    removeUser();
+                    break;
+                case 8:
+                    listAll();
+                    break;
+                case 9:
+                    printGroups();
+                    break;
+                case 10:
+                    changeGroups();
+                    break;
+                case 11:
+                    delFile();
+                    break;
+                case 12:
+                    downloadFile();
+                    break;
+                case 13:
+                    uploadFile();
+                    break;
+                case 14:
+                    listFiles();
+                    break;
+                default:
+                    end();
+                    break;
+                }
+            }
+            else
+            {
+                System.out.println("Sorry, you're deleted by ADMIN. Forced to log out");
                 end();
-                break;
-            case 1:
-                connectFileserver();
-                break;
-            case 2:
-                cuser();
-                break;
-            case 3:
-                duser();
-                break;
-            case 4:
-                cgroup();
-                break;
-            case 5:
-                dgroup();
-                break;
-            case 6:
-                addUser();
-                break;
-            case 7:
-                removeUser();
-                break;
-            case 8:
-                listAll();
-                break;
-            case 9:
-                printGroups();
-                break;
-            case 10:
-                changeGroups();
-                break;
-            case 11:
-                delFile();
-                break;
-            case 12:
-                downloadFile();
-                break;
-            case 13:
-                uploadFile();
-                break;
-            case 14:
-                listFiles();
-                break;
-            default:
-                end();
-                break;
+            }
         }
     }
     
@@ -202,9 +211,16 @@ public class ClientApp
         choice = input.nextInt();
         input.nextLine();
         if(choice == 1)
-        {
-            System.out.print("Please Enter the group name you would like to create: ");
-            String groupName = input.nextLine();
+        {   
+            String groupName;
+            //make sure the group name is not empty 
+            do 
+            {
+                System.out.print("Please Enter the group name you would like to create: ");
+                groupName = input.nextLine();
+            }
+            while(!groupName.equals(""));
+
             if(groupClient.createGroup(groupName, token))
                 System.out.println("Congratulations! You have created the new group " + groupName + " successfully!");
             else
@@ -220,12 +236,35 @@ public class ClientApp
         input.nextLine();
         if(choice == 1)
         {
-            System.out.print("Please Enter the group name you would like to delete: ");
-            String groupName = input.nextLine();
-            if(groupClient.deleteGroup(groupName, token))
-                System.out.println("Congratulations! You have deleted the new group " + groupName + " successfully!");
-            else
-                System.out.println("Sorry. You fail to delete this group. Please try other options.");
+            printGroups(token);
+            boolean stayinGroups = groupsCheck();
+            if(stayinGroups)
+            {
+                String groupName = selectGroup();
+                if(!groupName.equals(""))
+                {
+                    if(groupClient.deleteGroup(groupName, token))
+                    {
+                          System.out.println("Congratulations! You have deleted the new group " + groupName + " successfully!");
+                          //update token. 
+                          ArrayList<String> groups = new ArrayList(token.getGroups());
+                          if(groups.size() == 1)
+                          {
+                             //you only have one group on the file, but you delete that.
+                             System.out.println("You delete the group you're working on. You have to switch to other working groups.");
+                             changeGroups();//select the groups and update the token 
+                          }
+                          else
+                          {
+                             groups.remove(groups.indexOf(groupName));
+                             token = groupClient.getToken(username, groups);
+                             System.out.println("successfully updated token!");
+                          }
+                    }
+                    else
+                      System.out.println("Sorry. You fail to delete this group. Please try other options.");
+                }
+            }
         }
         System.out.println("Going back to main menu............................................\n");
     }
@@ -239,12 +278,22 @@ public class ClientApp
         {
             System.out.print("Please Enter the Username to be added: ");
             String userName = input.nextLine();
-            System.out.print("To which group would you like to add this user?: ");
-            String groupName = input.nextLine();
-            if(groupClient.addUserToGroup(userName, groupName, token)) {
-                System.out.println("Congratulations! You have added the user " + userName +" to the group " + groupName + " successfully!");
-			} else {
-				 System.out.println("Sorry. You fail to add this user to the group. Please try other options.");
+            printGroups(token);
+            boolean stayinGroups = groupsCheck();
+            if(stayinGroups)
+            {
+                String groupName = selectGroup();
+                if(!groupName.equals(""))
+                {
+                    if(groupClient.addUserToGroup(userName, groupName, token)) 
+                    {
+                        System.out.println("Congratulations! You have added the user " + userName +" to the group " + groupName + " successfully!");
+			        }
+                    else 
+                    {
+				        System.out.println("Sorry. You fail to add this user to the group. Please try other options.");
+                    }
+                }
             }
         }
         System.out.println("Going back to main menu............................................\n");
@@ -259,12 +308,19 @@ public class ClientApp
         {
             System.out.print("Please Enter the Username to be deleted: ");
             String userName = input.nextLine();
-            System.out.print("From which group would you like this user removed?:");
-            String groupName = input.nextLine();
-            if(groupClient.deleteUserFromGroup(userName, groupName, token)) {
-                System.out.println("\nCongratulations! You have deleted the user " + userName +" from the group " + groupName + " successfully!");
-			} else {
-				System.out.println("\nSorry. You fail to delete this user from the group. Please try other options.");
+            printGroups(token);
+            boolean stayinGroups = groupsCheck();
+            if(stayinGroups)
+            {
+                String groupName = selectGroup();
+                if(!groupName.equals(""))
+                {
+                    if(groupClient.deleteUserFromGroup(userName, groupName, token)) {
+                            System.out.println("\nCongratulations! You have deleted the user " + userName +" from the group " + groupName + " successfully!");
+        			} else {
+        				System.out.println("\nSorry. You fail to delete this user from the group. Please try other options.");
+                    }
+                }
             }
         }
         System.out.println("Going back to main menu............................................\n");
@@ -278,22 +334,28 @@ public class ClientApp
         if(choice == 1)
         {
             System.out.println();
-            token = groupClient.getToken(username);
-            System.out.print("Please Enter the group name which you would like to see all the members: ");
-            String groupName = input.nextLine();
-            List<String> members = groupClient.listMembers(groupName, token);
-            if(members != null && !members.isEmpty())
+            printGroups(token);
+            boolean stayinGroups = groupsCheck();
+            if(stayinGroups)
             {
-                System.out.println("\nCongratulations! You have fetched all the members from the group " + groupName + " successfully!");
-                System.out.println("Start to list");
-                members = new ArrayList<String>(groupClient.listMembers(groupName, token));
-                for(int i = 0; i < members.size(); i++)
+                String groupName = selectGroup();
+                if(!groupName.equals(""))
                 {
-                    System.out.println(""+ (i+1) + ". " + members.get(i));
+                        List<String> members = groupClient.listMembers(groupName, token);
+                        if(members != null && !members.isEmpty())
+                        {
+                            System.out.println("\nCongratulations! You have fetched all the members from the group " + groupName + " successfully!");
+                            System.out.println("Start to list");
+                            members = new ArrayList<String>(groupClient.listMembers(groupName, token));
+                            for(int i = 0; i < members.size(); i++)
+                            {
+                                System.out.println(""+ (i+1) + ". " + members.get(i));
+                            }
+                        } else {
+                            System.out.println("Sorry. You fail to list members of this group. Please try other options.");
+            			}
                 }
-            } else {
-                System.out.println("Sorry. You fail to list members of this group. Please try other options.");
-			}
+            }
         }
         System.out.println("Going back to main menu............................................\n");
     }
@@ -527,6 +589,39 @@ public class ClientApp
 			}
 			token = groupClient.getToken(username, groups);
 			System.out.println("successfully updated token!");
+        }
+    }
+
+    public static boolean groupsCheck()
+    {
+        System.out.print("Does this list include the group you want to work on? yes or no");
+        if((input.nextLine()).equalsIgnoreCase("yes"))
+            return true;
+        return false;
+    }
+
+    public static String selectGroup()
+    {
+        while(true)
+        {
+            printGroups(token);
+            System.out.print("Please enter the group name you would like to operate on:");
+            String groupName = input.nextLine();
+            ArrayList<String> groups = new ArrayList<String>(token.getGroups());
+            if(groups != null && groups.size() != 0)
+            {
+                for(int i = 0; i < groups.size(); i++)
+                {
+                    if((groups.get(i)).equalsIgnoreCase(groupName))
+                        return groupName;
+                }
+            } 
+            else 
+            {
+                System.out.println("Sorry. You don't belong to any group yet. Try to be in group first!");
+                return "";
+            }
+            System.out.println("Sorry, your entered name is not valid, please try again. If you would like to choose a group not in the list, you need to change your working groups");
         }
     }
 }
