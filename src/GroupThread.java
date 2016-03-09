@@ -32,26 +32,56 @@ public class GroupThread extends Thread
 			{
 				Envelope message = (Envelope)input.readObject();
 				System.out.println("Request received: " + message.getMessage());
-				Envelope response;
+				Envelope response = null;
 				
 				if(message.getMessage().equals("GET"))//Client wants a token
 				{
-					String username = (String)message.getObjContents().get(0); //Get the username
+					String username = new String((String)message.getObjContents().get(0)); //Get the username
 					if(username == null)
 					{
 						response = new Envelope("FAIL");
+						
 						response.addObject(null);
-						output.writeObject(response);
+					} else {
+						UserToken yourToken = createToken(username); //Create a token
+						
+						//Respond to the client. On error, the client will receive a null token
+						if(yourToken != null) {
+							response = new Envelope("OK");
+						} else {
+							response = new Envelope("FAIL");
+						}
+					   	response.addObject(yourToken);
+					}
+			   		output.writeObject(response);
+				   	output.flush();
+					output.reset();
+				}
+				if(message.getMessage().equals("GET_SUBSET"))//Client wants a token
+				{
+					String username = (String)message.getObjContents().get(0); //Get the username
+					ArrayList<String> subset = null;
+
+					//@SuppressWarnings("unchecked")
+					if(message.getObjContents().get(1) != null) {
+					    subset = new ArrayList<String>((ArrayList)message.getObjContents().get(1));
+				    }
+					if(username == null || subset == null)
+					{
+						response = new Envelope("FAIL");
+						response.addObject(null);
 					}
 					else
 					{
-						UserToken yourToken = createToken(username); //Create a token
+						UserToken yourToken = createToken(username, subset); //Create a token
 						
 						//Respond to the client. On error, the client will receive a null token
 						response = new Envelope("OK");
 						response.addObject(yourToken);
-						output.writeObject(response);
 					}
+					output.writeObject(response);
+					output.flush();
+					output.reset();
 				}
 				else if(message.getMessage().equals("CUSER")) //Client wants to create a user
 				{
@@ -254,11 +284,11 @@ public class GroupThread extends Thread
 					socket.close(); //Close the socket
 					proceed = false; //End this communication loop
 				}
-				else
-				{
-					response = new Envelope("FAIL"); //Server does not understand client request
-					output.writeObject(response);
-				}
+				//else
+				//{
+				//	response = new Envelope("FAIL"); //Server does not understand client request
+				//	output.writeObject(response);
+				//}
 			}while(proceed);	
 		}
 		catch(Exception e)
@@ -284,7 +314,25 @@ public class GroupThread extends Thread
 		}
 	}
 	
-	
+	private UserToken createToken(String username, ArrayList<String> subset) 
+	{
+		//Check that user exists
+		if(my_gs.userList.checkUser(username))
+		{
+			//Issue a new token with server's name, user's name, and user's groups
+			for(String group : subset) {
+			    if(!my_gs.userList.getUserGroups(username).contains(group)) {
+			        subset.remove(subset.indexOf(group));
+			    }
+			}
+			UserToken yourToken = new Token(my_gs.name, username, subset);
+			return yourToken;
+		}
+		else
+		{
+			return null;
+		}
+	}
 	//Method to create a user
 	private boolean createUser(String username, UserToken yourToken)
 	{
@@ -459,7 +507,7 @@ public class GroupThread extends Thread
 			}
 			else
 			{
-				return false //the requested group does not exist 
+				return false; //the requested group does not exist 
 			}
 		}
 		else
