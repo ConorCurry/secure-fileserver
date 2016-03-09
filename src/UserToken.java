@@ -1,5 +1,6 @@
 
 import java.util.List;
+import java.security.*;
 
 /**
  * A simple interface to the token data structure that will be
@@ -48,6 +49,12 @@ public interface UserToken
      */
     public List<String> getGroups();
 
+	/** This method initializes the signature on a token.
+	 *
+	 *@params The signing private key
+	 */
+	public void sign(PrivateKey privateKey);
+
 	/**
 	 *This method will verify the signature attached to this token.
 	 *Returns true if the authenticity can be verified, false otherwise.
@@ -55,6 +62,6 @@ public interface UserToken
 	 *@params The public key to verify against
 	 *@return true if verification success, false otherwise
 	 */
-	public boolean verify(Key publicKey);
+	public boolean verify(PublicKey publicKey);
 
 }   //-- end interface UserToken
