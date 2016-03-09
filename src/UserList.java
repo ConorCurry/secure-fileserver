@@ -10,10 +10,15 @@ import java.util.*;
 		private static final long serialVersionUID = 7600343803563417992L;
 		private Hashtable<String, User> list = new Hashtable<String, User>();
 		
-		public synchronized void addUser(String username)
+		public synchronized boolean addUser(String username)
 		{
-			User newUser = new User();
-			list.put(username, newUser);
+			if(username.contains('&') || username.contains(',')) {
+				return false;
+			} else {
+				User newUser = new User();
+				list.put(username, newUser);
+				return true;
+			}
 		}
 		
 		public synchronized void deleteUser(String username)
@@ -46,9 +51,14 @@ import java.util.*;
 		}
 		
 		/* add a new group to a user */
-		public synchronized void addGroup(String user, String groupname)
+		public synchronized boolean addGroup(String user, String groupname)
 		{
-			list.get(user).addGroup(groupname);
+			if(groupname.contains('&') || groupname.contains(',')) {
+				return false;
+			} else {
+				list.get(user).addGroup(groupname);
+				return true;
+			}
 		}
 		
 		/* remove a group from a user */

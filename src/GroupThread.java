@@ -353,8 +353,7 @@ public class GroupThread extends Thread
 				}
 				else
 				{
-					my_gs.userList.addUser(username);
-					return true;
+					return my_gs.userList.addUser(username); //returns true if successful
 				}
 			}
 			else
@@ -451,15 +450,16 @@ public class GroupThread extends Thread
 			{
 				return false; //Group already exists
 			}
-			else
+			else if(my_gs.groupList.addGroup(groupname, requester)) //if group is successfully added
 			{
 			    //this method handles group creation with an owner
 			    //also put the user as a group member
-				my_gs.groupList.addGroup(groupname, requester);
 				my_gs.groupList.addMember(requester, groupname);
 				my_gs.userList.addOwnership(requester, groupname);
 				my_gs.userList.addGroup(requester, groupname);
-				return true;
+
+			} else {
+				return false;
 			}
 		}
 		else
@@ -551,11 +551,11 @@ public class GroupThread extends Thread
 					{
                         return false; //the user is alredy added into that group
 					}
-					else
-					{
-						my_gs.userList.addGroup(user, group);
-                        my_gs.groupList.addMember(user, group);
+					else if(my_gs.userList.addGroup(user, group) && my_gs.groupList.addMember(user, group))
+					{                        
 						return true; //add successfully
+					} else {
+						return false; //unsuccessful
 					}
 				}
 				else
