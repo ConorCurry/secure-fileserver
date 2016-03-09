@@ -48,4 +48,13 @@ public interface UserToken
      */
     public List<String> getGroups();
 
+	/**
+	 *This method will verify the signature attached to this token.
+	 *Returns true if the authenticity can be verified, false otherwise.
+	 *
+	 *@params The public key to verify against
+	 *@return true if verification success, false otherwise
+	 */
+	public boolean verify(Key publicKey);
+
 }   //-- end interface UserToken
