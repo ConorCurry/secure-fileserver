@@ -24,7 +24,7 @@ public class GroupClient extends Client implements GroupClientInterface {
 			//Get the response from the server
 			response = (Envelope)input.readObject();
 			
-			System.out.printf("Server response msg: %s\n", response.getMessage());
+			//System.out.printf("Server response msg: %s\n", response.getMessage());
 			//Successful response
 			if(response.getMessage().equals("OK"))
 			{

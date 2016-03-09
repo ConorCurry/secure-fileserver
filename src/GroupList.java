@@ -12,7 +12,7 @@ import java.util.*;
 		
 		public synchronized boolean addGroup(String groupname, String owner)
 		{
-			if(groupname.contains('&') || groupname.contains(',')) {
+			if(groupname.indexOf('&') > 0 || groupname.indexOf(',') > 0) {
 				return false;
 			} else {
 				Group newGroup = new Group();
@@ -47,7 +47,7 @@ import java.util.*;
 		}
 		
 		public synchronized boolean addMember(String user, String groupname) {
-			if(user.contains('&') || user.contains(',')) {
+			if(user.indexOf('&') > 0 || user.indexOf(',') > 0) {
 				return false;
 			} else {
 				list.get(groupname).addMember(user);

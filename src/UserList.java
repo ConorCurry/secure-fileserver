@@ -12,7 +12,7 @@ import java.util.*;
 		
 		public synchronized boolean addUser(String username)
 		{
-			if(username.contains('&') || username.contains(',')) {
+			if(username.indexOf('&') > 0 || username.indexOf(',') > 0) {
 				return false;
 			} else {
 				User newUser = new User();
@@ -53,7 +53,7 @@ import java.util.*;
 		/* add a new group to a user */
 		public synchronized boolean addGroup(String user, String groupname)
 		{
-			if(groupname.contains('&') || groupname.contains(',')) {
+			if(groupname.indexOf('&') > 0 || groupname.indexOf(',') > 0) {
 				return false;
 			} else {
 				list.get(user).addGroup(groupname);

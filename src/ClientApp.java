@@ -169,6 +169,7 @@ public class ClientApp
         input.nextLine();
         if(choice == 1)
         {
+			System.out.println("Disallowed characters: '&' and  ','");
             System.out.print("Please Enter the Username you would like to create: ");
             String createdUserName = input.nextLine();
             if(groupClient.createUser(createdUserName, token))
@@ -203,6 +204,7 @@ public class ClientApp
         input.nextLine();
         if(choice == 1)
         {
+			System.out.println("Disallowed characters: '&' and  ','");
             System.out.print("Please Enter the group name you would like to create: ");
             String groupName = input.nextLine();
             if(groupClient.createGroup(groupName, token))

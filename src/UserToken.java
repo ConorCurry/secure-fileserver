@@ -53,7 +53,7 @@ public interface UserToken
 	 *
 	 *@params The signing private key
 	 */
-	public void sign(PrivateKey privateKey);
+	public void tokSign(PrivateKey privateKey) throws InvalidKeyException, SignatureException;
 
 	/**
 	 *This method will verify the signature attached to this token.
@@ -62,6 +62,6 @@ public interface UserToken
 	 *@params The public key to verify against
 	 *@return true if verification success, false otherwise
 	 */
-	public boolean verify(PublicKey publicKey);
+	public boolean tokVerify(PublicKey publicKey) throws InvalidKeyException, SignatureException;
 
 }   //-- end interface UserToken

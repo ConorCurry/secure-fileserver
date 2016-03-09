@@ -11,7 +11,7 @@ public class Token implements UserToken, java.io.Serializable{
     private String username;
     private ArrayList<String> accessibleGroups;
     private static final long serialVersionUID = -7726335089122193103L;
-	private bytes[] signature;
+	private byte[] signature;
 
     public Token(String gsName, String username, ArrayList<String> accessibleGroups) {
         this.gsName = gsName;
@@ -32,26 +32,42 @@ public class Token implements UserToken, java.io.Serializable{
     public List<String> getGroups() {
         return this.accessibleGroups;
     }
-
-	private String toString() {
+	
+	@Override
+	public String toString() {
 		//CAUTION: THIS REQUIRES THAT '&' AND ',' BE BLACKLISTED FROM USERNAMES, GS NAMES, AND GROUPNAMES
-		String strified = "";
-		strified += this.username + "&" + this.gsName + "&";
+		StringBuilder strified = new StringBuilder();
+		strified.append(this.username + "&" + this.gsName + "&");
 		for(String group : this.accessibleGroups) {
-			strified += group + ",";
-		}		
+			strified.append(group);
+			strified.append('+');
+		}
+		return strified.toString();
 	}
 
-	public void sign(PrivateKey privateKey) {
-		Signature sig = Signature.getInstance("SHA256withRSA", "BC");
-		sig.initSign(privateKey);
+	public void tokSign(PrivateKey privateKey) throws InvalidKeyException, SignatureException {
+		Signature sig = null;
+		try {
+			sig = Signature.getInstance("SHA256withRSA", "BC");
+		} catch (Exception e) {
+			System.err.println(e);
+			return;
+		}
 
+   		sig.initSign(privateKey);
 		sig.update(this.toString().getBytes()); //signing automatically hashes
-		this.signature = sig.sign();
+	   	this.signature = sig.sign();
 	}
 
-	public boolean verify(PublicKey publicKey) {
-		Signature sig = Signature.getInstance("SHA256withRSA", "BC");
+	public boolean tokVerify(PublicKey publicKey) throws InvalidKeyException, SignatureException {
+		Signature sig = null;
+		try {
+			sig = Signature.getInstance("SHA256withRSA", "BC");
+		} catch (Exception e) {
+			System.err.println(e);
+			return false;
+		}
+
 		sig.initVerify(publicKey);
 		sig.update(this.toString().getBytes()); //signing automatically hashes
 		if(sig.verify(signature)) {

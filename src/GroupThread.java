@@ -457,6 +457,7 @@ public class GroupThread extends Thread
 				my_gs.groupList.addMember(requester, groupname);
 				my_gs.userList.addOwnership(requester, groupname);
 				my_gs.userList.addGroup(requester, groupname);
+				return true;
 
 			} else {
 				return false;
