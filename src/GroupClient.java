@@ -6,6 +6,53 @@ import java.io.ObjectInputStream;
 
 public class GroupClient extends Client implements GroupClientInterface {
  
+	 //send the user name and challenge to the server 
+	 public ServerResponse sendChallenge(String username, RSAPrivateKey usrPrivKey, RSAPublicKey serverPublickey)
+	 {
+	 	try
+	 	{
+	 		ServerResponse serverMessage = null;
+	 		Envelope message = null, response = null;
+	 		message = new Envelope("CHALLENGE");
+	 		message.addObject(username);
+	 		//random generate a number 
+	 		long number = ;
+	 		byte[] encrypted_number = 
+	 		message.addObject(encrypted_number);
+	 		//sign the randomly generated number by user's private key
+	 		byte[] signed_number = 
+	 		//encrypt the whole message with the server's public key
+	 		message.addObject(signed_number);
+	 		//sent object
+	 		output.writeObject(message);
+			output.flush();
+			output.reset();
+		
+			//Get the response from the server
+			response = (Envelope)input.readObject();
+			
+			//Successful response
+			if(response.getMessage().equals("OK"))
+			{
+				//If there is a token in the Envelope, return it 
+				ArrayList<Object> temp = response.getObjContents();
+				
+				if(temp != null && temp.size() == 1)
+				{
+					serverMessage = (ServerResponse)temp.get(0);
+					return ServerResponse;
+				}
+			}
+			return null;
+	 	}
+	 	catch(Exception e)
+		{
+			System.err.println("Error: " + e.getMessage());
+			e.printStackTrace(System.err);
+			return null;
+		}
+	 }
+
 	 public UserToken getToken(String username)
 	 {
 		try
