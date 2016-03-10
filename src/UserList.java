@@ -1,6 +1,6 @@
 /* This list represents the users on the server */
 import java.util.*;
-import java.security.PublicKey;
+import java.security.*;
 
 public class UserList implements java.io.Serializable {
 	
@@ -67,7 +67,7 @@ public class UserList implements java.io.Serializable {
 			return null;
 		}
 
-		public synchronized KeyPair getServerKeyPair(String username)
+		public synchronized KeyPair getServerKeyPair()
 		{
 			return serverKeys;
 		}

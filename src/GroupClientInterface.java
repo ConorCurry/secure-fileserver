@@ -1,5 +1,5 @@
 import java.util.List;
-
+import java.security.PublicKey;
 /**
  * Interface describing the operations that must be supported by the
  * client application used to talk with the group server.  All methods
@@ -51,7 +51,7 @@ public interface GroupClientInterface
      * @return true if the new user was created, false otherwise
      *
      */
-    public boolean createUser(final String username, final UserToken token);
+    public boolean createUser(final String username, final UserToken token, final PublicKey to_be_added);
 
 
     /**

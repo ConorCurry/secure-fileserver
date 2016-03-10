@@ -19,7 +19,7 @@ public class ClientApp
     private static final int GS_PORT = 8765;
     private static final int FS_PORT = 4321;
     
-    public static void main(String[] args)
+    public static void main(String[] args) throws Exception
     {
         //create a new group client and file client
         groupClient = new GroupClient();
@@ -53,14 +53,14 @@ public class ClientApp
             FileInputStream ufis = new FileInputStream("UserKeyPair.bin");
             ObjectInputStream userKeysStream = new ObjectInputStream(ufis);
             
-            HashTable<String, KeyPair> user_keypair = (HashTable<String, KeyPair>)userStream.readObject();
+            Hashtable<String, KeyPair> user_keypair = (Hashtable<String, KeyPair>)userKeysStream.readObject();
             //if not, create a new key pair and add it into the file
             if(!user_keypair.contains(username))
             {
                 KeyPairGenerator kpg = KeyPairGenerator.getInstance("RSA", "BC");
                 kpg.initialize(3072, new SecureRandom());
                 KeyPair kp = kpg.genKeyPair();
-                user_keypair.add(username, kp);
+                user_keypair.put(username, kp);
                 //wrote the updated table back to the file 
                 ObjectOutputStream uKOutStream;
                 uKOutStream = new ObjectOutputStream(new FileOutputStream("UserKeyPair.bin"));
@@ -73,7 +73,7 @@ public class ClientApp
             FileInputStream kfis = new FileInputStream("ServerPublic.bin");
             ObjectInputStream serverKeysStream = new ObjectInputStream(kfis);
             PublicKey pubKey = (PublicKey)serverKeysStream.readObject();
-            boolean verified = groupClient.authenticate(username, privkey, pubkey, AES_key);
+            boolean verified = groupClient.authenticate(username, privkey, pubKey, AES_key);
             if(verified)
             {
                 masterToken = groupClient.getToken(username); //get a token for this user
@@ -166,7 +166,15 @@ public class ClientApp
                     connectFileserver();
                     break;
                 case 2:
-                    cuser();
+                    try
+                    {
+                        cuser();
+                    }
+                    catch (Exception e)
+                    {
+                        System.err.println("Error: " + e.getMessage());
+                        e.printStackTrace(System.err);
+                    }
                     break;
                 case 3:
                     duser();
@@ -214,7 +222,7 @@ public class ClientApp
 		}
 	}
         
-    public static void cuser()
+    public static void cuser() throws Exception
     {
         System.out.print("You have chose to create user. Press 1 to continue. Press other number to go back to main menu: ");
         choice = input.nextInt();
@@ -228,7 +236,7 @@ public class ClientApp
             String userKeyFile = "UserKeyPair.bin";
             FileInputStream ufis = new FileInputStream(userKeyFile);
             ObjectInputStream userKeysStream = new ObjectInputStream(ufis);
-            HashTable<String, KeyPair> user_keypair = (HashTable<String, KeyPair>)userStream.readObject();
+            Hashtable<String, KeyPair> user_keypair = (Hashtable<String, KeyPair>)userKeysStream.readObject();
             if(user_keypair.contains(createdUserName))
             {
                 if(groupClient.createUser(createdUserName, token, (user_keypair.get(createdUserName)).getPublic()))

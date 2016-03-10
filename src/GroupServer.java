@@ -56,35 +56,43 @@ public class GroupServer extends Server {
 			System.out.print("Enter your username: ");
 			String username = console.next();
 
-			HashTable<String, KeyPair> user_keypair = (HashTable<String, KeyPair>)userStream.readObject();
-			KeyPairGenerator kpg = KeyPairGenerator.getInstance("RSA", "BC");
-            kpg.initialize(3072, new SecureRandom());
-            KeyPair kp = kpg.genKeyPair();
-            user_keypair.add(username, kp);
-            PublicKey usrPubKey = kp.getPublic();
-            
-            //wrote the updated table back to the file 
-            ObjectOutputStream uKOutStream;
-            uKOutStream = new ObjectOutputStream(new FileOutputStream("UserKeyPair.bin"));
-            uKOutStream.writeObject(user_keypair);
-			
+			try
+			{
+				Hashtable <String, KeyPair> user_keypair = new Hashtable <String, KeyPair> ();
+				KeyPairGenerator kpg = KeyPairGenerator.getInstance("RSA", "BC");
+            	kpg.initialize(3072, new SecureRandom());
+           	 	KeyPair kp = kpg.genKeyPair();
+            	user_keypair.put(username, kp);
+	            PublicKey usrPubKey = kp.getPublic();
+	            
+	            //wrote the updated table back to the file 
+	            ObjectOutputStream uKOutStream;
+	            uKOutStream = new ObjectOutputStream(new FileOutputStream("UserKeyPair.bin"));
+	            uKOutStream.writeObject(user_keypair);
+				
 
-            KeyPairGenerator kpgn = KeyPairGenerator.getInstance("RSA", "BC");
-            kpgn.initialize(3072, new SecureRandom());
-            KeyPair kpn = kpgn.genKeyPair();
+	            KeyPairGenerator kpgn = KeyPairGenerator.getInstance("RSA", "BC");
+	            kpgn.initialize(3072, new SecureRandom());
+	            KeyPair kpn = kpgn.genKeyPair();
 
-            ObjectOutputStream sKOutStream;
-            sKOutStream = new ObjectOutputStream(new FileOutputStream("ServerPublic.bin"));
-            sKOutStream.writeObject(kp.getPublic());
+	            ObjectOutputStream sKOutStream;
+	            sKOutStream = new ObjectOutputStream(new FileOutputStream("ServerPublic.bin"));
+	            sKOutStream.writeObject(kp.getPublic());
 			
-			//Create a new list, add current user to the ADMIN group. They now own the ADMIN group.
-			userList = new UserList(kpn);
-			groupList = new GroupList();
-			userList.addUser(username, usrPubKey);
-			groupList.addGroup("ADMIN", username);
-            groupList.addMember(username, "ADMIN");
-			userList.addGroup(username, "ADMIN");
-			userList.addOwnership(username, "ADMIN");
+				//Create a new list, add current user to the ADMIN group. They now own the ADMIN group.
+				userList = new UserList(kpn);
+				groupList = new GroupList();
+				userList.addUser(username, usrPubKey);
+				groupList.addGroup("ADMIN", username);
+	            groupList.addMember(username, "ADMIN");
+				userList.addGroup(username, "ADMIN");
+				userList.addOwnership(username, "ADMIN");
+			}
+	        catch (Exception en)
+	        {
+	        	 System.err.println("Error: " + en.getMessage());
+                 en.printStackTrace(System.err);
+	        }
 		}
 		catch(IOException e)
 		{

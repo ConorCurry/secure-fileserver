@@ -1,18 +1,15 @@
 /* Implements the GroupClient Interface */
 
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Arrays;
-import java.io.ObjectInputStream;
+import java.util.*;
+import java.io.*;
 import org.bouncycastle.jce.provider.*;
 import javax.crypto.*;
 import java.security.*;
-import java.security.spec.*;
 
 public class GroupClient extends Client implements GroupClientInterface {
  
 	 //send the user name and challenge to the server 
-	 public boolean authenticate(String username, PrivateKey usrPrivKey, PublicKey serverPubey, SecretKey AES_key)
+	 public boolean authenticate(String username, PrivateKey usrPrivKey, PublicKey serverPubkey, SecretKey AES_key)
 	 {
 	 	try
 	 	{
@@ -59,7 +56,7 @@ public class GroupClient extends Client implements GroupClientInterface {
 			//Successful response
 			if(plain_response.getMessage().equals("OK"))
 			{ 
-				ArrayList<Object> temp = response.getObjContents();
+				ArrayList<Object> temp = plain_response.getObjContents();
 				
 				if(temp != null && temp.size() == 2)
 				{
@@ -79,10 +76,10 @@ public class GroupClient extends Client implements GroupClientInterface {
 						SealedObject second_response = (SealedObject)input.readObject();
 						Cipher sdcipher = Cipher.getInstance("AES/CBC/PKCS5Padding", "BC");
 						sdcipher.init(Cipher.DECRYPT_MODE, AES_key);
-						Envelope plain_response = (Envelope)response.getObject(sdcipher);
+						Envelope plain_response_2 = (Envelope)second_response.getObject(sdcipher);
 			
 						//Successful response
-						if(plain_response.getMessage().equals("OK")) return true;
+						if(plain_response_2.getMessage().equals("OK")) return true;
 					}
 				}
 			}

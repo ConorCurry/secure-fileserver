@@ -8,6 +8,7 @@ import java.util.*;
 import org.bouncycastle.jce.provider.*;
 import javax.crypto.*;
 import java.security.*;
+import javax.crypto.spec.SecretKeySpec;
 
 public class GroupThread extends Thread 
 {
@@ -26,8 +27,9 @@ public class GroupThread extends Thread
 	{
 		boolean proceed = true;
 		Security.addProvider(new BouncyCastleProvider());
-		pubKey = my_gs.userList.getServerPublicKey();
-		privKey = my_gs.userList.getServerPrivateKey();
+		KeyPair serverKeyPair = my_gs.userList.getServerKeyPair();
+		pubKey = serverKeyPair.getPublic();
+		privKey = serverKeyPair.getPrivate();
 
 		try
 		{
@@ -52,12 +54,12 @@ public class GroupThread extends Thread
 				dec.init(Cipher.DECRYPT_MODE, privKey);
 				
 				String username = (String)temp.get(0);
-				PublicKey usrPubKey = my_gs.userList.getPublicKey(username);
+				PublicKey usrPubKey = my_gs.userList.getUserPublicKey(username);
 				//if the user exists 
-				if(usrPubkey != null)
+				if(usrPubKey != null)
 				{
 					Signature sig = Signature.getInstance("RSA", "BC");
-					sig.initVerify(usrPubkey);
+					sig.initVerify(usrPubKey);
 			    	//update original data to be verified and verify the data
 			    	sig.update((byte[])temp.get(2));
 			    	byte[] to_be_verified = (byte[])temp.get(3);
@@ -89,7 +91,7 @@ public class GroupThread extends Thread
 					{
 						response_a = new Envelope("FAIL");
 					}
-				output.writeObject(response.encrypted(usrPubKey));
+				output.writeObject(response_a.encrypted(usrPubKey));
 				output.flush();
 				output.reset();
 				}
@@ -108,11 +110,11 @@ public class GroupThread extends Thread
 			}
 			
 			SealedObject message_sealed_new = (SealedObject)input.readObject();
-			Cipher scipher = Cipher.getInstance("AES/CBC/PKCS5Padding", "BC");
-			scipher.init(Cipher.DECRYPT_MODE, AES_key);
-			Envelope plain_message = (Envelope)message_sealed_new.getObject(scipher);
+			Cipher sdcipher = Cipher.getInstance("AES/CBC/PKCS5Padding", "BC");
+			sdcipher.init(Cipher.DECRYPT_MODE, AES_key);
+			Envelope plain_message_v = (Envelope)message_sealed_new.getObject(sdcipher);
 			Envelope response_v = null;
-			byte[] to_be_verified =(byte[]) plain_message.getObjContents.get(0);
+			byte[] to_be_verified =(byte[]) (plain_message_v).getObjContents().get(0);
 			if(Arrays.equals(to_be_verified, rndBytes))
 			{
 				response_v = new Envelope("OK");
@@ -122,7 +124,7 @@ public class GroupThread extends Thread
 				response_v = new Envelope("FAIL");
 			}
 			response_v.encrypted(AES_key);
-			output.writeObject(response);
+			output.writeObject(response_v);
 			output.flush();
 			output.reset();
 
