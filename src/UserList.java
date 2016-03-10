@@ -1,8 +1,8 @@
 /* This list represents the users on the server */
 import java.util.*;
+import java.security.PublicKey;
 
-
-	public class UserList implements java.io.Serializable {
+public class UserList implements java.io.Serializable {
 	
 		/**
 		 * 
@@ -51,6 +51,15 @@ import java.util.*;
 		{
 			return list.get(username).getOwnership();
 		}
+
+		public synchronized PublicKey getUserPublicKey(String username)
+		{
+			if(list.contains(username))
+			{
+				return list.get(username).getPublicKey();
+			}
+			return null;
+		}
 		
 		/* add a new group to a user */
 		public synchronized boolean addGroup(String user, String groupname)
@@ -89,11 +98,13 @@ import java.util.*;
 		private static final long serialVersionUID = -6699986336399821598L;
 		private ArrayList<String> groups;
 		private ArrayList<String> ownership;
+		private PublicKey pubKey;
 		
-		public User()
+		public User(PublicKey key)
 		{
 			groups = new ArrayList<String>();
 			ownership = new ArrayList<String>();
+			pubKey = key;
 		}
 		
 		public ArrayList<String> getGroups()
@@ -106,6 +117,11 @@ import java.util.*;
 			return ownership;
 		}
 		
+		public PublicKey getPublicKey()
+		{
+			return pubKey;
+		}
+
 		public void addGroup(String group)
 		{
 			groups.add(group);

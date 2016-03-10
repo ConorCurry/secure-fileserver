@@ -71,7 +71,7 @@ public class GroupClient extends Client implements GroupClientInterface {
 		    			sig.update(rndBytes);
 		    			byte[] to_be_verified = (byte[])object_list.get(1);
 		    			boolean verified = sig.verify(to_be_verified);
-						//if matches, return the AES session key
+						//if matches, return the AES key
 		    			if(verified)
 		    			{
 							return (SecretKey)object_list.get(0);

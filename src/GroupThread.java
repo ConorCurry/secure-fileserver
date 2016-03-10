@@ -10,6 +10,8 @@ public class GroupThread extends Thread
 {
 	private final Socket socket;
 	private GroupServer my_gs;
+	private PublicKey pubKey;
+	private PrivateKey privKey;
 	
 	public GroupThread(Socket _socket, GroupServer _gs)
 	{
@@ -28,6 +30,76 @@ public class GroupThread extends Thread
 			final ObjectInputStream input = new ObjectInputStream(socket.getInputStream());
 			final ObjectOutputStream output = new ObjectOutputStream(socket.getOutputStream());
 			
+			Envelope message = (Envelope)input.readObject();
+			System.out.println("Request received: " + message.getMessage());
+			Envelope response = null;
+				
+			ArrayList<Object> temp = response.getObjContents();
+			SecretKey AES_key = null; //store shared sceret key later. 
+				
+			if(temp != null && temp.size() == 1)
+			{
+				//decrypt the sealed object with server's private key 
+				Cipher dec = Cipher.getInstance("RSA", "BC");
+				dec.init(Cipher.DECRYPT_MODE, privKey);
+				SealedObject encryptedMessage = (SealedObject)temp.get(0);
+				Envelope mResponse = (Envelope) encryptedMessage.getObject(dec);
+				ArrayList<Object> object_list = mResponse.getObjContents();
+				if(object_list != null && object_list.size() == 3)
+				{ 
+					String username = (String)object_list.get(0);
+					PublicKey usrPubKey = my_gs.userList.getPublicKey(username);
+					//if the user exists 
+					if(usrPubkey != null)
+					{
+						Signature sig = Signature.getInstance("RSA", "BC");
+						sig.initVerify(usrPubkey);
+			    		//update original data to be verified and verify the data
+			    		sig.update((byte[])object_list.get(1));
+			    		byte[] to_be_verified = (byte[])object_list.get(2);
+			    		boolean verified = sig.verify(to_be_verified);
+						//if matches, generate AES key, signed the number and encrypt that with user's public key 
+			    		if(verified)
+			    		{
+							KeyGenerator key = KeyGenerator.getInstance("AES", "BC");
+							SecureRandom random = new SecureRandom();
+							key.init(, random); //128-bit AES key
+							AES_key = key.generateKey();
+							
+							sig = Signature.getInstance("RSA", "BC");
+							sig.initSign(privKey, new SecureRandom());
+							//update encrypted data to be signed and sign the data 
+							sig.update((byte[])object_list.get(1);
+							byte[] sigBytes = sig.sign();
+							response = new Envelope("OK");
+
+							response.addObject(AES_key);
+							response.addObject(sigBytes);
+						}
+						else
+						{
+							response = new Envelope("FAIL");
+						}
+					}
+					else
+					{
+						response = new Envelope("FAIL");
+					}
+				}
+				else
+				{
+					response = new Envelope("FAIL");
+				}
+			}
+			else
+			{
+				response = new Envelope("FAIL");
+			}
+			response.encrypMessage(usrPubkey);
+			output.writeObject(response);
+			output.flush();
+			output.reset();
+				
 			do
 			{
 				Envelope message = (Envelope)input.readObject();
