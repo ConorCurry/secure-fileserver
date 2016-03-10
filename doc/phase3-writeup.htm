@@ -46,7 +46,7 @@ your group has decided to use to address threats T1â€“T4.</p>
 
 <p>Through this mechanism, the authentication of both the user and the server is done by the signed messages. The exhange of AES symmetric key is done through the secure channel supported by RSA key pairs</p>
 
-<p>The key exchanged protocol is secure. First, the user will pick a big, random numbers. Those numbers should be 64-bit integers, which will lead to 2^64 possible values, making it hard for the adversary to guess in brute-force. During the process of exchanging, the user and the server encrypt messages with the other side's public key, and only the the other side knows the associated private key. As a result, no one can decrypt this message except themselves The digital signature of the user and the server ensures that the message is sent from the desired identity.</p>
+<p>The key exchanged protocol is secure. First, the user will pick a big, random numbers. The number should be a 64-bit integer, which will lead to 2^64 possible values, making it hard for the adversary to guess in brute-force. During the process of exchanging, the user and the server encrypt messages with the other side's public key, and only the the other side knows the associated private key. As a result, no one can decrypt this message except themselves The digital signatures of the user and the server ensure that the messages are sent from the desired identity.</p>
 
 
 <!-- END CHANGES HERE -->
