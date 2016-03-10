@@ -7,22 +7,33 @@ import java.io.ObjectInputStream;
 public class GroupClient extends Client implements GroupClientInterface {
  
 	 //send the user name and challenge to the server 
-	 public ServerResponse sendChallenge(String username, RSAPrivateKey usrPrivKey, RSAPublicKey serverPublickey)
+	 public SecretKey sendChallenge(String username, RSAPrivateKey usrPrivKey, RSAPublicKey serverPubkey)
 	 {
 	 	try
 	 	{
+	 		Security.addProvider(new BouncyCastleProvider());
+	 		
 	 		ServerResponse serverMessage = null;
 	 		Envelope message = null, response = null;
 	 		message = new Envelope("CHALLENGE");
 	 		message.addObject(username);
-	 		//random generate a number 
-	 		long number = ;
-	 		byte[] encrypted_number = 
-	 		message.addObject(encrypted_number);
+	 		
+	 		//random generate a 64-bit number and add that to the message 
+	 		SecureRandom sr = new SecureRandom();
+			byte[] rndBytes = new byte[8];
+			sr.nextBytes(rndBytes);
+	 		
+	 		message.addObject(rndBytes);
 	 		//sign the randomly generated number by user's private key
-	 		byte[] signed_number = 
+	 		//generate signature
+			Signature sig = Signature.getInstance("RSA", "BC");
+			sig.initSign(usrPrivKey, new SecureRandom());
+			//update encrypted data to be signed and sign the data 
+			sig.update(rndBytes);
+			byte[] sigBytes = sig.sign();
 	 		//encrypt the whole message with the server's public key
-	 		message.addObject(signed_number);
+	 		message.addObject(sigBytes);
+	 		message.encryptMessage(serverPubkey);
 	 		//sent object
 	 		output.writeObject(message);
 			output.flush();
@@ -39,8 +50,25 @@ public class GroupClient extends Client implements GroupClientInterface {
 				
 				if(temp != null && temp.size() == 1)
 				{
-					serverMessage = (ServerResponse)temp.get(0);
-					return ServerResponse;
+					Cipher dec = Cipher.getInstance("RSA", "BC");
+					dec.init(Cipher.DECRYPT_MODE, usrPrivKey);
+					SealedObject encryptedMessage = new SealedObject(temp.get(0));
+					Envelope mResponse = new Envelope(encryptedMessage.getObject(dec));
+					ArrayList<object> object_list = mResponse.getObjContents(); 
+					if(object_list != null && object_list.size() == 2)
+					{
+						//verify the nonce and verify the signature
+						sig.initVerify(serverPubkey);
+		    			//update original data to be verified and verify the data
+		    			sig.update(rndBytes);
+		    			bytes[] to_be_verified = object_list.get(1);
+		    			boolean verified = sig.verify(to_be_verified);
+						//if matches, return the AES session key
+		    			if(verified)
+		    			{
+							return (SecretKey)object_list.get(0);
+						}
+					}
 				}
 			}
 			return null;
