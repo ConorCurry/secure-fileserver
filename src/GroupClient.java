@@ -3,17 +3,25 @@
 import java.util.ArrayList;
 import java.util.List;
 import java.io.ObjectInputStream;
+import javax.crypto.Cipher;
+import java.security.SecureRandom;
+import java.security.Security;
+import javax.crypto.SecretKey;
+import java.security.PrivateKey;
+import java.security.PublicKey;
+import java.security.Signature;
+import javax.crypto.SealedObject;
+import org.bouncycastle.jce.provider.BouncyCastleProvider;
 
 public class GroupClient extends Client implements GroupClientInterface {
  
 	 //send the user name and challenge to the server 
-	 public SecretKey sendChallenge(String username, RSAPrivateKey usrPrivKey, RSAPublicKey serverPubkey)
+	 public SecretKey sendChallenge(String username, PrivateKey usrPrivKey, PublicKey serverPubkey)
 	 {
 	 	try
 	 	{
 	 		Security.addProvider(new BouncyCastleProvider());
 	 		
-	 		ServerResponse serverMessage = null;
 	 		Envelope message = null, response = null;
 	 		message = new Envelope("CHALLENGE");
 	 		message.addObject(username);
@@ -52,16 +60,16 @@ public class GroupClient extends Client implements GroupClientInterface {
 				{
 					Cipher dec = Cipher.getInstance("RSA", "BC");
 					dec.init(Cipher.DECRYPT_MODE, usrPrivKey);
-					SealedObject encryptedMessage = new SealedObject(temp.get(0));
-					Envelope mResponse = new Envelope(encryptedMessage.getObject(dec));
-					ArrayList<object> object_list = mResponse.getObjContents(); 
+					SealedObject encryptedMessage = (SealedObject)temp.get(0);
+					Envelope mResponse = (Envelope) encryptedMessage.getObject(dec);
+					ArrayList<Object> object_list = mResponse.getObjContents(); 
 					if(object_list != null && object_list.size() == 2)
 					{
 						//verify the nonce and verify the signature
 						sig.initVerify(serverPubkey);
 		    			//update original data to be verified and verify the data
 		    			sig.update(rndBytes);
-		    			bytes[] to_be_verified = object_list.get(1);
+		    			byte[] to_be_verified = (byte[])object_list.get(1);
 		    			boolean verified = sig.verify(to_be_verified);
 						//if matches, return the AES session key
 		    			if(verified)
