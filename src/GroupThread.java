@@ -165,7 +165,7 @@ public class GroupThread extends Thread
 
 					//@SuppressWarnings("unchecked")
 					if(message.getObjContents().get(1) != null) {
-					    subset = new ArrayList<String>((ArrayList)message.getObjContents().get(1));
+					    subset = new ArrayList<String>((ArrayList<String>)message.getObjContents().get(1));
 				    }
 					if(username == null || subset == null)
 					{

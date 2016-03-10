@@ -41,22 +41,25 @@ public class ClientApp
             }
         } while(!groupClient.connect(gs_name, gs_port));
        
+
+        //genereate a 256-bit AES key for securely transmission
         KeyGenerator key = KeyGenerator.getInstance("AES", "BC");
-        SecureRandom random = new SecureRandom();
-        key.init(256, random); //128-bit AES key
+        key.init(256, new SecureRandom());
         AES_key = key.generateKey();
         
         do {
             System.out.print("Please enter your username to log in: ");
             username = input.nextLine();
+            
             //read the key pair file to see whether the user exists already.
             FileInputStream ufis = new FileInputStream("UserKeyPair.bin");
             ObjectInputStream userKeysStream = new ObjectInputStream(ufis);
-            
             Hashtable<String, KeyPair> user_keypair = (Hashtable<String, KeyPair>)userKeysStream.readObject();
+            
             //if not, create a new key pair and add it into the file
             if(!user_keypair.contains(username))
             {
+                //create a new key pair for this protential user 
                 KeyPairGenerator kpg = KeyPairGenerator.getInstance("RSA", "BC");
                 kpg.initialize(3072, new SecureRandom());
                 KeyPair kp = kpg.genKeyPair();
@@ -66,14 +69,17 @@ public class ClientApp
                 uKOutStream = new ObjectOutputStream(new FileOutputStream("UserKeyPair.bin"));
                 uKOutStream.writeObject(user_keypair);
             }
+            //get the user's private key from the user's key pair stored in the table 
+            PrivateKey privkey = (user_keypair.get(username)).getPrivate();
 
-            KeyPair kpair = user_keypair.get(username);
-            PrivateKey privkey = kpair.getPrivate();
-
+            //read in server's public key from the file storing server's public key 
             FileInputStream kfis = new FileInputStream("ServerPublic.bin");
             ObjectInputStream serverKeysStream = new ObjectInputStream(kfis);
-            PublicKey pubKey = (PublicKey)serverKeysStream.readObject();
-            boolean verified = groupClient.authenticate(username, privkey, pubKey, AES_key);
+            PublicKey sevPubKey = (PublicKey)serverKeysStream.readObject();
+
+            //authenticate process to check whether the authentication succeeds. 
+            boolean verified = groupClient.authenticate(username, privkey, sevPubKey, AES_key);
+            //if the authentication succeeds, then the user can use the AES key to acquire token 
             if(verified)
             {
                 masterToken = groupClient.getToken(username); //get a token for this user
@@ -91,6 +97,7 @@ public class ClientApp
             }
             else
             {
+               //authentication fails, users may try again or be logged out 
                 System.out.print("Sorry, the authentication fails. Try again? (y/n): ");
                 String response = input.nextLine();
                 if(!response.equalsIgnoreCase("y")) {
@@ -233,10 +240,12 @@ public class ClientApp
             System.out.print("Please Enter the Username you would like to create: ");
             String createdUserName = input.nextLine();
 
+            //the ADMIN needs to know the public key of the user
             String userKeyFile = "UserKeyPair.bin";
             FileInputStream ufis = new FileInputStream(userKeyFile);
             ObjectInputStream userKeysStream = new ObjectInputStream(ufis);
             Hashtable<String, KeyPair> user_keypair = (Hashtable<String, KeyPair>)userKeysStream.readObject();
+            //if the public key already exists, can start to create  that user 
             if(user_keypair.contains(createdUserName))
             {
                 if(groupClient.createUser(createdUserName, token, (user_keypair.get(createdUserName)).getPublic()))
@@ -246,6 +255,7 @@ public class ClientApp
             }
             else
             {
+                //if the key pair is not stored yet, the ADMIN can't create that user 
                 System.out.println("Sorry, this user does not have key pairs on file. Please check back later.");
             }
         }
@@ -310,7 +320,7 @@ public class ClientApp
                     {
                           System.out.println("Congratulations! You have deleted the group " + groupName + " successfully!");
                           //update token. 
-                          ArrayList<String> groups = new ArrayList(token.getGroups());
+                          ArrayList<String> groups = new ArrayList <String>(token.getGroups());
                           if(groups.size() == 1 && groups.get(0).equals(groupName))
                           {
                              //you only have one group on the file, but you delete that.
@@ -341,7 +351,6 @@ public class ClientApp
         {
             System.out.print("Please Enter the Username to be added: ");
             String userName = input.nextLine();
-            printGroups(token);
             boolean stayinGroups = groupsCheck();
             if(stayinGroups)
             {
@@ -371,16 +380,18 @@ public class ClientApp
         {
             System.out.print("Please Enter the Username to be deleted: ");
             String userName = input.nextLine();
-            printGroups(token);
             boolean stayinGroups = groupsCheck();
             if(stayinGroups)
             {
                 String groupName = selectGroup();
                 if(!groupName.equals(""))
                 {
-                    if(groupClient.deleteUserFromGroup(userName, groupName, token)) {
+                    if(groupClient.deleteUserFromGroup(userName, groupName, token)) 
+                    {
                             System.out.println("\nCongratulations! You have deleted the user " + userName +" from the group " + groupName + " successfully!");
-        			} else {
+        			} 
+                    else 
+                    {
         				System.out.println("\nSorry. You fail to delete this user from the group. Please try other options.");
                     }
                 }
@@ -397,7 +408,6 @@ public class ClientApp
         if(choice == 1)
         {
             System.out.println();
-            printGroups(token);
             boolean stayinGroups = groupsCheck();
             if(stayinGroups)
             {
@@ -659,6 +669,7 @@ public class ClientApp
 
     public static boolean groupsCheck()
     {
+        printGroups(token);
         System.out.print("Does this list include the group you want to work on? (y/n): ");
         if((input.nextLine()).charAt(0) == 'y')
             return true;
@@ -667,21 +678,27 @@ public class ClientApp
 
     public static String selectGroup()
     {
+        String group_to_be_returned = "";
+        char response;
         do
         {
             printGroups(token);
-            System.out.print("\nPlease enter the group name you would like to operate on: ");
+            System.out.print("Please enter the group name you would like to operate on: ");
             String groupName = input.nextLine();
 			if(token.getGroups().size() == 0) {
 				System.out.println("You don't belong to any groups yet.");
-				return "";
+				group_to_be_returned = "";
+                break;
 			}
             else if(token.getGroups().contains(groupName)) {
-				return groupName;
+				group_to_be_returned = groupName;
+                break;
 			}
             System.out.println("Sorry, your entered name is not valid, please try again. If you would like to choose a group not in the list, you need to change your working groups");
 			System.out.print("Would you like to try again? (y/n): ");
-        } while(input.nextLine().charAt(0) == 'y');
-		return "";
+            response = input.nextLine().charAt(0);
+        } while(response == 'y');
+		
+        return group_to_be_returned;
 	}
 }

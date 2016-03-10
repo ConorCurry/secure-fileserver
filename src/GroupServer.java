@@ -58,6 +58,7 @@ public class GroupServer extends Server {
 
 			try
 			{
+				//generate a key pair for the first user
 				Hashtable <String, KeyPair> user_keypair = new Hashtable <String, KeyPair> ();
 				KeyPairGenerator kpg = KeyPairGenerator.getInstance("RSA", "BC");
             	kpg.initialize(3072, new SecureRandom());
@@ -70,11 +71,12 @@ public class GroupServer extends Server {
 	            uKOutStream = new ObjectOutputStream(new FileOutputStream("UserKeyPair.bin"));
 	            uKOutStream.writeObject(user_keypair);
 				
-
+	            //generate a key pair for the server
 	            KeyPairGenerator kpgn = KeyPairGenerator.getInstance("RSA", "BC");
 	            kpgn.initialize(3072, new SecureRandom());
 	            KeyPair kpn = kpgn.genKeyPair();
 
+	            //write server's public key to a file 
 	            ObjectOutputStream sKOutStream;
 	            sKOutStream = new ObjectOutputStream(new FileOutputStream("ServerPublic.bin"));
 	            sKOutStream.writeObject(kp.getPublic());

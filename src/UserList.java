@@ -8,7 +8,7 @@ public class UserList implements java.io.Serializable {
 		 * 
 		 */
 		private static final long serialVersionUID = 7600343803563417992L;
-		private static KeyPair serverKeys;
+		private KeyPair serverKeys;
 		private static final char[] blacklist = {'&', '+'};
 		private Hashtable<String, User> list = new Hashtable<String, User>();
 		
@@ -60,11 +60,7 @@ public class UserList implements java.io.Serializable {
 
 		public synchronized PublicKey getUserPublicKey(String username)
 		{
-			if(list.contains(username))
-			{
-				return list.get(username).getPublicKey();
-			}
-			return null;
+			return list.get(username).getPublicKey();
 		}
 
 		public synchronized KeyPair getServerKeyPair()
