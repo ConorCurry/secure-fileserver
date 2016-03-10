@@ -2,90 +2,97 @@
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Arrays;
 import java.io.ObjectInputStream;
-import javax.crypto.Cipher;
-import java.security.SecureRandom;
-import java.security.Security;
-import javax.crypto.SecretKey;
-import java.security.PrivateKey;
-import java.security.PublicKey;
-import java.security.Signature;
-import javax.crypto.SealedObject;
-import org.bouncycastle.jce.provider.BouncyCastleProvider;
+import org.bouncycastle.jce.provider.*;
+import javax.crypto.*;
+import java.security.*;
+import java.security.spec.*;
 
 public class GroupClient extends Client implements GroupClientInterface {
  
 	 //send the user name and challenge to the server 
-	 public SecretKey sendChallenge(String username, PrivateKey usrPrivKey, PublicKey serverPubkey)
+	 public boolean authenticate(String username, PrivateKey usrPrivKey, PublicKey serverPubey, SecretKey AES_key)
 	 {
 	 	try
 	 	{
 	 		Security.addProvider(new BouncyCastleProvider());
 	 		
-	 		Envelope message = null, response = null;
+	 		Envelope message = null;
+	 		SealedObject response = null;
 	 		message = new Envelope("CHALLENGE");
 	 		message.addObject(username);
 	 		
-	 		//random generate a 64-bit number and add that to the message 
+	 		//random generate a 64-bit number, encrypt it, and add that to the message 
 	 		SecureRandom sr = new SecureRandom();
 			byte[] rndBytes = new byte[8];
 			sr.nextBytes(rndBytes);
+	 		Cipher cipher = Cipher.getInstance("RSA", "BC");
+	 		cipher.init(Cipher.ENCRYPT_MODE, serverPubkey);
+	 		message.addObject(cipher.doFinal(rndBytes));
 	 		
-	 		message.addObject(rndBytes);
-	 		//sign the randomly generated number by user's private key
-	 		//generate signature
+	 		//encrypt the secret key 
+	 		byte[] key_data = AES_key.getEncoded();
+	 		cipher.init(Cipher.ENCRYPT_MODE, serverPubkey);
+			byte[] encrypted_data = cipher.doFinal(key_data);
+			message.addObject(encrypted_data);
+	 		
+	 		//generate signature for the encrypted secret key 
 			Signature sig = Signature.getInstance("RSA", "BC");
 			sig.initSign(usrPrivKey, new SecureRandom());
 			//update encrypted data to be signed and sign the data 
-			sig.update(rndBytes);
+			sig.update(encrypted_data);
 			byte[] sigBytes = sig.sign();
-	 		//encrypt the whole message with the server's public key
 	 		message.addObject(sigBytes);
-	 		message.encryptMessage(serverPubkey);
+
 	 		//sent object
-	 		output.writeObject(message);
+	 		output.writeObject(message.encrypted(serverPubkey));
 			output.flush();
 			output.reset();
 		
 			//Get the response from the server
-			response = (Envelope)input.readObject();
+			response = (SealedObject)input.readObject();
+			Cipher scipher = Cipher.getInstance("AES/CBC/PKCS5Padding", "BC");
+			scipher.init(Cipher.DECRYPT_MODE, usrPrivKey);
+			Envelope plain_response = (Envelope)response.getObject(scipher);
 			
 			//Successful response
-			if(response.getMessage().equals("OK"))
-			{
-				//If there is a token in the Envelope, return it 
+			if(plain_response.getMessage().equals("OK"))
+			{ 
 				ArrayList<Object> temp = response.getObjContents();
 				
-				if(temp != null && temp.size() == 1)
+				if(temp != null && temp.size() == 2)
 				{
-					Cipher dec = Cipher.getInstance("RSA", "BC");
-					dec.init(Cipher.DECRYPT_MODE, usrPrivKey);
-					SealedObject encryptedMessage = (SealedObject)temp.get(0);
-					Envelope mResponse = (Envelope) encryptedMessage.getObject(dec);
-					ArrayList<Object> object_list = mResponse.getObjContents(); 
-					if(object_list != null && object_list.size() == 2)
+					byte[] numberFromServer = (byte[])temp.get(0);
+					if(Arrays.equals(numberFromServer, rndBytes))
 					{
-						//verify the nonce and verify the signature
-						sig.initVerify(serverPubkey);
-		    			//update original data to be verified and verify the data
-		    			sig.update(rndBytes);
-		    			byte[] to_be_verified = (byte[])object_list.get(1);
-		    			boolean verified = sig.verify(to_be_verified);
-						//if matches, return the AES key
-		    			if(verified)
-		    			{
-							return (SecretKey)object_list.get(0);
-						}
+						
+						Cipher rcipher = Cipher.getInstance("RSA", "BC");
+						rcipher.init(Cipher.DECRYPT_MODE, usrPrivKey);
+			    		byte[] serverGeneratedNumber = rcipher.doFinal((byte[])temp.get(1));
+			    	 	message = new Envelope ("Verify");
+			    	 	message.addObject(serverGeneratedNumber);
+			    	 	output.writeObject(message.encrypted(AES_key));
+						output.flush();
+						output.reset();
+						
+						SealedObject second_response = (SealedObject)input.readObject();
+						Cipher sdcipher = Cipher.getInstance("AES/CBC/PKCS5Padding", "BC");
+						sdcipher.init(Cipher.DECRYPT_MODE, AES_key);
+						Envelope plain_response = (Envelope)response.getObject(sdcipher);
+			
+						//Successful response
+						if(plain_response.getMessage().equals("OK")) return true;
 					}
 				}
 			}
-			return null;
+			return false;
 	 	}
 	 	catch(Exception e)
 		{
 			System.err.println("Error: " + e.getMessage());
 			e.printStackTrace(System.err);
-			return null;
+			return false;
 		}
 	 }
 
@@ -171,7 +178,7 @@ public class GroupClient extends Client implements GroupClientInterface {
 			return null;
 		}		
 	 }
-	 public boolean createUser(String username, UserToken token)
+	 public boolean createUser(String username, UserToken token, PublicKey to_be_added)
 	 {
 		 try
 			{
@@ -180,6 +187,7 @@ public class GroupClient extends Client implements GroupClientInterface {
 				message = new Envelope("CUSER");
 				message.addObject(username); //Add user name string
 				message.addObject(token); //Add the requester's token
+				message.addObject(to_be_added);
 				output.writeObject(message);
 			
 				response = (Envelope)input.readObject();

@@ -1,6 +1,8 @@
-import java.util.Scanner;
-import java.util.List;
-import java.util.ArrayList;
+import java.io.*;
+import java.util.*;
+import org.bouncycastle.jce.provider.*;
+import javax.crypto.*;
+import java.security.*;
 
 public class ClientApp
 {
@@ -13,6 +15,7 @@ public class ClientApp
     private static String gs_name, fs_name;
     private static int fs_port, gs_port;
     private static UserToken token;
+    private static SecretKey AES_key;
     private static final int GS_PORT = 8765;
     private static final int FS_PORT = 4321;
     
@@ -22,7 +25,8 @@ public class ClientApp
         groupClient = new GroupClient();
         fileClient = new FileClient();
         input = new Scanner(System.in);
-        
+        Security.addProvider(new BouncyCastleProvider());
+
         System.out.println("------------Welcome to CS1653 Group-Based File Sharing application------------\n");
         do {
             System.out.print("Please enter the group server name: ");
@@ -36,15 +40,58 @@ public class ClientApp
                 gs_port = GS_PORT;
             }
         } while(!groupClient.connect(gs_name, gs_port));
+       
+        KeyGenerator key = KeyGenerator.getInstance("AES", "BC");
+        SecureRandom random = new SecureRandom();
+        key.init(256, random); //128-bit AES key
+        AES_key = key.generateKey();
         
         do {
             System.out.print("Please enter your username to log in: ");
             username = input.nextLine();
-            masterToken = groupClient.getToken(username); //get a token for this user
-            token = masterToken;
-            if(masterToken == null)
+            //read the key pair file to see whether the user exists already.
+            FileInputStream ufis = new FileInputStream("UserKeyPair.bin");
+            ObjectInputStream userKeysStream = new ObjectInputStream(ufis);
+            
+            HashTable<String, KeyPair> user_keypair = (HashTable<String, KeyPair>)userStream.readObject();
+            //if not, create a new key pair and add it into the file
+            if(!user_keypair.contains(username))
             {
-                System.out.print("Sorry, you do not belong to this group server. Try again? (y/n): ");
+                KeyPairGenerator kpg = KeyPairGenerator.getInstance("RSA", "BC");
+                kpg.initialize(3072, new SecureRandom());
+                KeyPair kp = kpg.genKeyPair();
+                user_keypair.add(username, kp);
+                //wrote the updated table back to the file 
+                ObjectOutputStream uKOutStream;
+                uKOutStream = new ObjectOutputStream(new FileOutputStream("UserKeyPair.bin"));
+                uKOutStream.writeObject(user_keypair);
+            }
+
+            KeyPair kpair = user_keypair.get(username);
+            PrivateKey privkey = kpair.getPrivate();
+
+            FileInputStream kfis = new FileInputStream("ServerPublic.bin");
+            ObjectInputStream serverKeysStream = new ObjectInputStream(kfis);
+            PublicKey pubKey = (PublicKey)serverKeysStream.readObject();
+            boolean verified = groupClient.authenticate(username, privkey, pubkey, AES_key);
+            if(verified)
+            {
+                masterToken = groupClient.getToken(username); //get a token for this user
+                token = masterToken;
+                if(masterToken == null)
+                {
+                    System.out.print("Sorry, you do not belong to this group server. Try again? (y/n): ");
+                    String response = input.nextLine();
+                    if(!response.equalsIgnoreCase("y")){
+                        groupClient.disconnect();
+                        input.close();
+                        System.exit(0);
+                    }
+                }
+            }
+            else
+            {
+                System.out.print("Sorry, the authentication fails. Try again? (y/n): ");
                 String response = input.nextLine();
                 if(!response.equalsIgnoreCase("y")) {
                     groupClient.disconnect();
@@ -52,11 +99,10 @@ public class ClientApp
                     System.exit(0);
                 }
             }
-        } while(masterToken == null);
+        }while(masterToken == null);
         
         System.out.printf("Welcome %s!\n", username);
-		//input.nextLine();
-		//input.nextLine();
+		
         changeGroups();
         while(true) {
             printGroupMenu();
@@ -178,10 +224,22 @@ public class ClientApp
 			System.out.println("Disallowed characters: '&' and  ','");
             System.out.print("Please Enter the Username you would like to create: ");
             String createdUserName = input.nextLine();
-            if(groupClient.createUser(createdUserName, token))
-                System.out.println("Congratulations! You have created user " + createdUserName + " successfully!");
+
+            String userKeyFile = "UserKeyPair.bin";
+            FileInputStream ufis = new FileInputStream(userKeyFile);
+            ObjectInputStream userKeysStream = new ObjectInputStream(ufis);
+            HashTable<String, KeyPair> user_keypair = (HashTable<String, KeyPair>)userStream.readObject();
+            if(user_keypair.contains(createdUserName))
+            {
+                if(groupClient.createUser(createdUserName, token, (user_keypair.get(createdUserName)).getPublic()))
+                    System.out.println("Congratulations! You have created user " + createdUserName + " successfully!");
+                else
+                    System.out.println("Sorry. You fail to create this user. Please try other options.");
+            }
             else
-                System.out.println("Sorry. You fail to create this user. Please try other options.");
+            {
+                System.out.println("Sorry, this user does not have key pairs on file. Please check back later.");
+            }
         }
         System.out.println("Going back to main menu............................................\n");
     }
@@ -233,10 +291,10 @@ public class ClientApp
         input.nextLine();
         if(choice == 1)
         {
-            //printGroups(token);
-            //boolean stayinGroups = groupsCheck();
-            //if(stayinGroups)
-            //{
+            printGroups(token);
+            boolean stayinGroups = groupsCheck();
+            if(stayinGroups)
+            {
                 String groupName = selectGroup();
                 if(!groupName.equals(""))
                 {
@@ -261,7 +319,7 @@ public class ClientApp
                     else
                       System.out.println("Sorry. You fail to delete this group. Please try other options.");
                 }
-				//}
+			}
         }
         System.out.println("Going back to main menu............................................\n");
     }
@@ -275,10 +333,10 @@ public class ClientApp
         {
             System.out.print("Please Enter the Username to be added: ");
             String userName = input.nextLine();
-            //printGroups(token);
-            //boolean stayinGroups = groupsCheck();
-            //if(stayinGroups)
-            //{
+            printGroups(token);
+            boolean stayinGroups = groupsCheck();
+            if(stayinGroups)
+            {
                 String groupName = selectGroup();
                 if(!groupName.equals(""))
                 {
@@ -291,7 +349,7 @@ public class ClientApp
 				        System.out.println("Sorry. You fail to add this user to the group. Please try other options.");
                     }
                 }
-				//}
+			}
         }
         System.out.println("Going back to main menu............................................\n");
     }
@@ -305,10 +363,10 @@ public class ClientApp
         {
             System.out.print("Please Enter the Username to be deleted: ");
             String userName = input.nextLine();
-            //printGroups(token);
-            //boolean stayinGroups = groupsCheck();
-            //if(stayinGroups)
-            //{
+            printGroups(token);
+            boolean stayinGroups = groupsCheck();
+            if(stayinGroups)
+            {
                 String groupName = selectGroup();
                 if(!groupName.equals(""))
                 {
@@ -318,7 +376,7 @@ public class ClientApp
         				System.out.println("\nSorry. You fail to delete this user from the group. Please try other options.");
                     }
                 }
-				// }
+			}
         }
         System.out.println("Going back to main menu............................................\n");
     }
@@ -331,41 +389,30 @@ public class ClientApp
         if(choice == 1)
         {
             System.out.println();
-<<<<<<< HEAD
-            token = groupClient.getToken(username);
-            System.out.print("Please Enter the group name which you would like to see all the members: ");
-            String groupName = input.nextLine();
-            List<String> members = groupClient.listMembers(groupName, token);
-            if(members != null && !members.isEmpty())
+            printGroups(token);
+            boolean stayinGroups = groupsCheck();
+            if(stayinGroups)
             {
-                System.out.println("\nCongratulations! You have fetched all the memers from the group " + groupName + " successfully!");
-                System.out.println("Start to list");
-                members = new ArrayList<String>(groupClient.listMembers(groupName, token));
-                for(int i = 0; i < members.size(); i++)
-=======
-            //printGroups(token);
-            //boolean stayinGroups = groupsCheck();
-            //if(stayinGroups)
-            //{
                 String groupName = selectGroup();
                 if(!groupName.equals(""))
->>>>>>> origin/SignedToken
                 {
-                        List<String> members = groupClient.listMembers(groupName, token);
-                        if(members != null && !members.isEmpty())
+                    List<String> members = groupClient.listMembers(groupName, token);
+                    if(members != null && !members.isEmpty())
+                    {
+                        System.out.println("\nCongratulations! You have fetched all the members from the group " + groupName + " successfully!");
+                        System.out.println("Start to list");
+                        members = new ArrayList<String>(groupClient.listMembers(groupName, token));
+                        for(int i = 0; i < members.size(); i++)
                         {
-                            System.out.println("\nCongratulations! You have fetched all the members from the group " + groupName + " successfully!");
-                            System.out.println("Start to list");
-                            members = new ArrayList<String>(groupClient.listMembers(groupName, token));
-                            for(int i = 0; i < members.size(); i++)
-                            {
-                                System.out.println(""+ (i+1) + ". " + members.get(i));
-                            }
-                        } else {
-                            System.out.println("Sorry. You fail to list members of this group. Please try other options.");
-            			}
-                }
-				//}
+                            System.out.println(""+ (i+1) + ". " + members.get(i));
+                        }
+                    }
+                    else 
+                    {
+                        System.out.println("Sorry. You fail to list members of this group. Please try other options.");
+                    }
+                } 
+            }
         }
         System.out.println("Going back to main menu............................................\n");
     }

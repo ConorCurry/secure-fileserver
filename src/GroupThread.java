@@ -5,6 +5,9 @@ import java.lang.Thread;
 import java.net.Socket;
 import java.io.*;
 import java.util.*;
+import org.bouncycastle.jce.provider.*;
+import javax.crypto.*;
+import java.security.*;
 
 public class GroupThread extends Thread 
 {
@@ -22,6 +25,9 @@ public class GroupThread extends Thread
 	public void run()
 	{
 		boolean proceed = true;
+		Security.addProvider(new BouncyCastleProvider());
+		pubKey = my_gs.userList.getServerPublicKey();
+		privKey = my_gs.userList.getServerPrivateKey();
 
 		try
 		{
@@ -30,76 +36,97 @@ public class GroupThread extends Thread
 			final ObjectInputStream input = new ObjectInputStream(socket.getInputStream());
 			final ObjectOutputStream output = new ObjectOutputStream(socket.getOutputStream());
 			
-			Envelope message = (Envelope)input.readObject();
-			System.out.println("Request received: " + message.getMessage());
-			Envelope response = null;
+			SealedObject message_sealed = (SealedObject)input.readObject();
+			Cipher scipher = Cipher.getInstance("AES/CBC/PKCS5Padding", "BC");
+			scipher.init(Cipher.DECRYPT_MODE, privKey);
+			Envelope plain_message = (Envelope)message_sealed.getObject(scipher);
+			Envelope response_a = null;
 				
-			ArrayList<Object> temp = response.getObjContents();
+			ArrayList<Object> temp = plain_message.getObjContents();
 			SecretKey AES_key = null; //store shared sceret key later. 
-				
-			if(temp != null && temp.size() == 1)
+			byte[] rndBytes = null;
+			if(temp != null && temp.size() == 4)
 			{
 				//decrypt the sealed object with server's private key 
 				Cipher dec = Cipher.getInstance("RSA", "BC");
 				dec.init(Cipher.DECRYPT_MODE, privKey);
-				SealedObject encryptedMessage = (SealedObject)temp.get(0);
-				Envelope mResponse = (Envelope) encryptedMessage.getObject(dec);
-				ArrayList<Object> object_list = mResponse.getObjContents();
-				if(object_list != null && object_list.size() == 3)
-				{ 
-					String username = (String)object_list.get(0);
-					PublicKey usrPubKey = my_gs.userList.getPublicKey(username);
-					//if the user exists 
-					if(usrPubkey != null)
-					{
-						Signature sig = Signature.getInstance("RSA", "BC");
-						sig.initVerify(usrPubkey);
-			    		//update original data to be verified and verify the data
-			    		sig.update((byte[])object_list.get(1));
-			    		byte[] to_be_verified = (byte[])object_list.get(2);
-			    		boolean verified = sig.verify(to_be_verified);
-						//if matches, generate AES key, signed the number and encrypt that with user's public key 
-			    		if(verified)
-			    		{
-							KeyGenerator key = KeyGenerator.getInstance("AES", "BC");
-							SecureRandom random = new SecureRandom();
-							key.init(, random); //128-bit AES key
-							AES_key = key.generateKey();
-							
-							sig = Signature.getInstance("RSA", "BC");
-							sig.initSign(privKey, new SecureRandom());
-							//update encrypted data to be signed and sign the data 
-							sig.update((byte[])object_list.get(1);
-							byte[] sigBytes = sig.sign();
-							response = new Envelope("OK");
+				
+				String username = (String)temp.get(0);
+				PublicKey usrPubKey = my_gs.userList.getPublicKey(username);
+				//if the user exists 
+				if(usrPubkey != null)
+				{
+					Signature sig = Signature.getInstance("RSA", "BC");
+					sig.initVerify(usrPubkey);
+			    	//update original data to be verified and verify the data
+			    	sig.update((byte[])temp.get(2));
+			    	byte[] to_be_verified = (byte[])temp.get(3);
+			    	boolean verified = sig.verify(to_be_verified);
+					//if matches, decrypts to get the AES key, generate a new number and encrypt that with user's public key 
+			    	if(verified)
+			    	{
 
-							response.addObject(AES_key);
-							response.addObject(sigBytes);
-						}
-						else
-						{
-							response = new Envelope("FAIL");
-						}
+							response_a = new Envelope("OK");
+							Cipher rcipher = Cipher.getInstance("RSA", "BC");
+							rcipher.init(Cipher.DECRYPT_MODE, privKey);
+				    		byte[] userGeneratedNumber = rcipher.doFinal((byte[])temp.get(1));
+				    		response_a.addObject(userGeneratedNumber);
+
+				    		//get the AES key transmitted 
+				    		rcipher = Cipher.getInstance("RSA", "BC");
+							rcipher.init(Cipher.DECRYPT_MODE, privKey);
+							byte[] encrypted_AES = (byte[])temp.get(2);
+				    		AES_key = new SecretKeySpec(encrypted_AES, 0, encrypted_AES.length, "AES");
+							
+							SecureRandom sr = new SecureRandom();
+							rndBytes = new byte[8];
+							sr.nextBytes(rndBytes);
+					 		Cipher cipher = Cipher.getInstance("RSA", "BC");
+					 		cipher.init(Cipher.ENCRYPT_MODE, usrPubKey);
+					 		response_a.addObject(cipher.doFinal(rndBytes));
 					}
 					else
 					{
-						response = new Envelope("FAIL");
+						response_a = new Envelope("FAIL");
 					}
+				output.writeObject(response.encrypted(usrPubKey));
+				output.flush();
+				output.reset();
 				}
 				else
 				{
-					response = new Envelope("FAIL");
+					response_a = new Envelope("FAIL");
 				}
 			}
 			else
 			{
-				response = new Envelope("FAIL");
+				//what if the user does not existed in the file yet. How to fix it?
+				//response = new Envelope("FAIL");
+				//output.writeObject(response);
+				//output.flush();
+				//output.reset();
 			}
-			response.encrypMessage(usrPubkey);
+			
+			SealedObject message_sealed_new = (SealedObject)input.readObject();
+			Cipher scipher = Cipher.getInstance("AES/CBC/PKCS5Padding", "BC");
+			scipher.init(Cipher.DECRYPT_MODE, AES_key);
+			Envelope plain_message = (Envelope)message_sealed_new.getObject(scipher);
+			Envelope response_v = null;
+			byte[] to_be_verified =(byte[]) plain_message.getObjContents.get(0);
+			if(Arrays.equals(to_be_verified, rndBytes))
+			{
+				response_v = new Envelope("OK");
+			}
+			else
+			{
+				response_v = new Envelope("FAIL");
+			}
+			response_v.encrypted(AES_key);
 			output.writeObject(response);
 			output.flush();
 			output.reset();
-				
+
+
 			do
 			{
 				Envelope message = (Envelope)input.readObject();
@@ -157,7 +184,7 @@ public class GroupThread extends Thread
 				}
 				else if(message.getMessage().equals("CUSER")) //Client wants to create a user
 				{
-					if(message.getObjContents().size() < 2)
+					if(message.getObjContents().size() < 3)
 					{
 						response = new Envelope("FAIL");
 					}
@@ -169,12 +196,15 @@ public class GroupThread extends Thread
 						{
 							if(message.getObjContents().get(1) != null) //index 1 is the token from user requested
 							{
-								String username = (String)message.getObjContents().get(0); //Extract the username
-								UserToken yourToken = (UserToken)message.getObjContents().get(1); //Extract the token
-								
-								if(createUser(username, yourToken))
+								if(message.getObjContents().get(2) != null)//index 2 is the public key of the user to be added
 								{
-									response = new Envelope("OK"); //Success
+									String username = (String)message.getObjContents().get(0); //Extract the username
+									UserToken yourToken = (UserToken)message.getObjContents().get(1); //Extract the token
+									PublicKey to_be_added = (PublicKey)message.getObjContents().get(2);//Extract the public key
+									if(createUser(username, yourToken, to_be_added))
+									{
+										response = new Envelope("OK"); //Success
+									}
 								}
 							}
 						}
@@ -406,7 +436,7 @@ public class GroupThread extends Thread
 		}
 	}
 	//Method to create a user
-	private boolean createUser(String username, UserToken yourToken)
+	private boolean createUser(String username, UserToken yourToken, PublicKey to_be_added)
 	{
 		String requester = yourToken.getSubject();
 		
@@ -425,7 +455,7 @@ public class GroupThread extends Thread
 				}
 				else
 				{
-					return my_gs.userList.addUser(username); //returns true if successful
+					return my_gs.userList.addUser(username, to_be_added); //returns true if successful
 				}
 			}
 			else

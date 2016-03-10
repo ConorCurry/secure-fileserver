@@ -8,17 +8,23 @@ public class UserList implements java.io.Serializable {
 		 * 
 		 */
 		private static final long serialVersionUID = 7600343803563417992L;
+		private static KeyPair serverKeys;
 		private static final char[] blacklist = {'&', '+'};
 		private Hashtable<String, User> list = new Hashtable<String, User>();
 		
-		public synchronized boolean addUser(String username)
+		public UserList(KeyPair serverKeys)
+		{
+			this.serverKeys = serverKeys;
+		}
+
+		public synchronized boolean addUser(String username, PublicKey pubKey)
 		{
 			for(char invalidChar : blacklist) {
 				if(username.indexOf(invalidChar) > 0) {
 					return false;
 				}
 			}
-		   	User newUser = new User();
+		   	User newUser = new User(pubKey);
 	   		list.put(username, newUser);
    			return true;
 		}
@@ -59,6 +65,11 @@ public class UserList implements java.io.Serializable {
 				return list.get(username).getPublicKey();
 			}
 			return null;
+		}
+
+		public synchronized KeyPair getServerKeyPair(String username)
+		{
+			return serverKeys;
 		}
 		
 		/* add a new group to a user */
