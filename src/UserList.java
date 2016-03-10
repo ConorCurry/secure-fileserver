@@ -8,17 +8,19 @@ import java.util.*;
 		 * 
 		 */
 		private static final long serialVersionUID = 7600343803563417992L;
+		private static final char[] blacklist = {'&', '+'};
 		private Hashtable<String, User> list = new Hashtable<String, User>();
 		
 		public synchronized boolean addUser(String username)
 		{
-			if(username.indexOf('&') > 0 || username.indexOf(',') > 0) {
-				return false;
-			} else {
-				User newUser = new User();
-				list.put(username, newUser);
-				return true;
+			for(char invalidChar : blacklist) {
+				if(username.indexOf(invalidChar) > 0) {
+					return false;
+				}
 			}
+		   	User newUser = new User();
+	   		list.put(username, newUser);
+   			return true;
 		}
 		
 		public synchronized void deleteUser(String username)
@@ -53,12 +55,13 @@ import java.util.*;
 		/* add a new group to a user */
 		public synchronized boolean addGroup(String user, String groupname)
 		{
-			if(groupname.indexOf('&') > 0 || groupname.indexOf(',') > 0) {
-				return false;
-			} else {
-				list.get(user).addGroup(groupname);
-				return true;
+			for(char invalidChar : blacklist) {
+				if(groupname.indexOf(invalidChar) > 0) {
+					return false;
+				}
 			}
+			list.get(user).addGroup(groupname);
+			return true;
 		}
 		
 		/* remove a group from a user */
