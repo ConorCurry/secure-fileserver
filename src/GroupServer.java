@@ -84,7 +84,7 @@ public class GroupServer extends Server {
 		{
 
 			final ServerSocket serverSock = new ServerSocket(port);
-
+			System.out.printf("%s is up and running \n", this.getClass().getName());
 			Socket sock = null;
 			GroupThread thread = null;
 

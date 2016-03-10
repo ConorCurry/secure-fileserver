@@ -32,26 +32,56 @@ public class GroupThread extends Thread
 			{
 				Envelope message = (Envelope)input.readObject();
 				System.out.println("Request received: " + message.getMessage());
-				Envelope response;
+				Envelope response = null;
 				
 				if(message.getMessage().equals("GET"))//Client wants a token
 				{
-					String username = (String)message.getObjContents().get(0); //Get the username
+					String username = new String((String)message.getObjContents().get(0)); //Get the username
 					if(username == null)
 					{
 						response = new Envelope("FAIL");
+						
 						response.addObject(null);
-						output.writeObject(response);
+					} else {
+						UserToken yourToken = createToken(username); //Create a token
+						
+						//Respond to the client. On error, the client will receive a null token
+						if(yourToken != null) {
+							response = new Envelope("OK");
+						} else {
+							response = new Envelope("FAIL");
+						}
+					   	response.addObject(yourToken);
+					}
+			   		output.writeObject(response);
+				   	output.flush();
+					output.reset();
+				}
+				if(message.getMessage().equals("GET_SUBSET"))//Client wants a token
+				{
+					String username = (String)message.getObjContents().get(0); //Get the username
+					ArrayList<String> subset = null;
+
+					//@SuppressWarnings("unchecked")
+					if(message.getObjContents().get(1) != null) {
+					    subset = new ArrayList<String>((ArrayList)message.getObjContents().get(1));
+				    }
+					if(username == null || subset == null)
+					{
+						response = new Envelope("FAIL");
+						response.addObject(null);
 					}
 					else
 					{
-						UserToken yourToken = createToken(username); //Create a token
+						UserToken yourToken = createToken(username, subset); //Create a token
 						
 						//Respond to the client. On error, the client will receive a null token
 						response = new Envelope("OK");
 						response.addObject(yourToken);
-						output.writeObject(response);
 					}
+					output.writeObject(response);
+					output.flush();
+					output.reset();
 				}
 				else if(message.getMessage().equals("CUSER")) //Client wants to create a user
 				{
@@ -254,11 +284,11 @@ public class GroupThread extends Thread
 					socket.close(); //Close the socket
 					proceed = false; //End this communication loop
 				}
-				else
-				{
-					response = new Envelope("FAIL"); //Server does not understand client request
-					output.writeObject(response);
-				}
+				//else
+				//{
+				//	response = new Envelope("FAIL"); //Server does not understand client request
+				//	output.writeObject(response);
+				//}
 			}while(proceed);	
 		}
 		catch(Exception e)
@@ -284,7 +314,25 @@ public class GroupThread extends Thread
 		}
 	}
 	
-	
+	private UserToken createToken(String username, ArrayList<String> subset) 
+	{
+		//Check that user exists
+		if(my_gs.userList.checkUser(username))
+		{
+			//Issue a new token with server's name, user's name, and user's groups
+			for(String group : subset) {
+			    if(!my_gs.userList.getUserGroups(username).contains(group)) {
+			        subset.remove(subset.indexOf(group));
+			    }
+			}
+			UserToken yourToken = new Token(my_gs.name, username, subset);
+			return yourToken;
+		}
+		else
+		{
+			return null;
+		}
+	}
 	//Method to create a user
 	private boolean createUser(String username, UserToken yourToken)
 	{
@@ -294,7 +342,7 @@ public class GroupThread extends Thread
 		if(my_gs.userList.checkUser(requester))
 		{
 			//Get the user's groups
-			ArrayList<String> temp = my_gs.userList.getUserGroups(requester);
+			ArrayList<String> temp = new ArrayList<>(yourToken.getGroups());
 			//requester needs to be an administrator
 			if(temp.contains("ADMIN"))
 			{
@@ -305,8 +353,7 @@ public class GroupThread extends Thread
 				}
 				else
 				{
-					my_gs.userList.addUser(username);
-					return true;
+					return my_gs.userList.addUser(username); //returns true if successful
 				}
 			}
 			else
@@ -328,7 +375,7 @@ public class GroupThread extends Thread
 		//Does requester exist?
 		if(my_gs.userList.checkUser(requester))
 		{
-			ArrayList<String> temp = my_gs.userList.getUserGroups(requester);
+			ArrayList<String> temp = new ArrayList<>(yourToken.getGroups());
 			//requester needs to be an administer
 			if(temp.contains("ADMIN"))
 			{
@@ -403,15 +450,17 @@ public class GroupThread extends Thread
 			{
 				return false; //Group already exists
 			}
-			else
+			else if(my_gs.groupList.addGroup(groupname, requester)) //if group is successfully added
 			{
 			    //this method handles group creation with an owner
 			    //also put the user as a group member
-				my_gs.groupList.addGroup(groupname, requester);
 				my_gs.groupList.addMember(requester, groupname);
 				my_gs.userList.addOwnership(requester, groupname);
 				my_gs.userList.addGroup(requester, groupname);
 				return true;
+
+			} else {
+				return false;
 			}
 		}
 		else
@@ -431,8 +480,8 @@ public class GroupThread extends Thread
 			//does the requested group exist?
 			if(my_gs.groupList.checkGroup(groupname))
 			{
-				//does the requested group is owned by the user?
-				if(my_gs.groupList.checkOwnership(requester, groupname))
+				//is the requested group owned by the user?
+				if(my_gs.groupList.checkOwnership(requester, groupname) && yourToken.getGroups().contains(groupname))
 				{
 					//loop through all users, removing the group from each one
 	                for(String member: my_gs.groupList.getMembers(groupname)) {
@@ -474,7 +523,7 @@ public class GroupThread extends Thread
 		String requester = yourtoken.getSubject();
 
 		//Whether this user is the owner of this group?
-		if(my_gs.groupList.checkOwnership(requester, group))
+		if(my_gs.groupList.checkOwnership(requester, group) && yourtoken.getGroups().contains(group))
 		{
             ArrayList<String> members = new ArrayList<String>(my_gs.groupList.getMembers(group));//have to create a new instanation
             return members;
@@ -495,7 +544,7 @@ public class GroupThread extends Thread
 			//get the list of group owned by requester
 			ArrayList<String> temp = my_gs.userList.getUserOwnership(requester);
 			
-			if(temp.contains(group))
+			if(temp.contains(group) && yourtoken.getGroups().contains(group))
 			{
 				if(my_gs.userList.checkUser(user))
 				{
@@ -503,11 +552,11 @@ public class GroupThread extends Thread
 					{
                         return false; //the user is alredy added into that group
 					}
-					else
-					{
-						my_gs.userList.addGroup(user, group);
-                        my_gs.groupList.addMember(user, group);
+					else if(my_gs.userList.addGroup(user, group) && my_gs.groupList.addMember(user, group))
+					{                        
 						return true; //add successfully
+					} else {
+						return false; //unsuccessful
 					}
 				}
 				else
@@ -536,7 +585,7 @@ public class GroupThread extends Thread
 			//get the list of group owned by requester
 			ArrayList<String> temp = my_gs.userList.getUserOwnership(requester);
 			
-			if(temp.contains(group))
+			if(temp.contains(group) && yourtoken.getGroups().contains(group))
 			{
 				if(my_gs.userList.checkUser(user))
 				{
