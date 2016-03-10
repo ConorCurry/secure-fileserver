@@ -16,7 +16,7 @@ public class GroupClient extends Client implements GroupClientInterface {
 	 		Security.addProvider(new BouncyCastleProvider());
 	 		
 	 		Envelope message = null;
-	 		SealedObject response = null;
+	 		Envelope response = null;
 	 		message = new Envelope("CHALLENGE");
 	 		message.addObject(username);
 	 		
@@ -43,45 +43,48 @@ public class GroupClient extends Client implements GroupClientInterface {
 	 		message.addObject(sigBytes);
 
 	 		//sent object
-	 		output.writeObject(message.encrypted(serverPubkey));
+	 		message.encrypted(serverPubkey);
+	 		output.writeObject(message);
 			output.flush();
 			output.reset();
 		
 			//Get the response from the server
-			response = (SealedObject)input.readObject();
-			Cipher scipher = Cipher.getInstance("AES/CBC/PKCS5Padding", "BC");
-			scipher.init(Cipher.DECRYPT_MODE, usrPrivKey);
-			Envelope plain_response = (Envelope)response.getObject(scipher);
-			
-			//Successful response
-			if(plain_response.getMessage().equals("OK"))
-			{ 
-				ArrayList<Object> temp = plain_response.getObjContents();
-				
-				if(temp != null && temp.size() == 2)
-				{
-					byte[] numberFromServer = (byte[])temp.get(0);
-					if(Arrays.equals(numberFromServer, rndBytes))
-					{
+			response = ((Envelope)input.readObject()).decrypted(usrPrivKey);
+
+			//if it's null and it's a failure message because the server can't find the user's public key to encrypt the message 
+			//if its not null, it might be a succeess message 
+			if(response != null)
+			{
+					//Successful response
+					if(response.getMessage().equals("OK"))
+					{ 
+						ArrayList<Object> temp = response.getObjContents();
 						
-						Cipher rcipher = Cipher.getInstance("RSA", "BC");
-						rcipher.init(Cipher.DECRYPT_MODE, usrPrivKey);
-			    		byte[] serverGeneratedNumber = rcipher.doFinal((byte[])temp.get(1));
-			    	 	message = new Envelope ("Verify");
-			    	 	message.addObject(serverGeneratedNumber);
-			    	 	output.writeObject(message.encrypted(AES_key));
-						output.flush();
-						output.reset();
-						
-						SealedObject second_response = (SealedObject)input.readObject();
-						Cipher sdcipher = Cipher.getInstance("AES/CBC/PKCS5Padding", "BC");
-						sdcipher.init(Cipher.DECRYPT_MODE, AES_key);
-						Envelope plain_response_2 = (Envelope)second_response.getObject(sdcipher);
-			
-						//Successful response
-						if(plain_response_2.getMessage().equals("OK")) return true;
+						if(temp != null && temp.size() == 2)
+						{
+							byte[] numberFromServer = (byte[])temp.get(0);
+							if(Arrays.equals(numberFromServer, rndBytes))
+							{
+								
+								//get the server's generated number
+								Cipher rcipher = Cipher.getInstance("RSA", "BC");
+								rcipher.init(Cipher.DECRYPT_MODE, usrPrivKey);
+					    		byte[] serverGeneratedNumber = rcipher.doFinal((byte[])temp.get(1));
+					    	 	
+					    	 	Envelope second_message = new Envelope ("Verify");
+					    	 	second_message.addObject(serverGeneratedNumber);
+					    	 	second_message.encrypted(AES_key);
+					    	 	output.writeObject(second_message);
+								output.flush();
+								output.reset();
+								
+								Envelope second_response = ((Envelope)input.readObject()).decrypted(AES_key);
+					
+								//Successful response
+								if(second_response.getMessage().equals("OK")) return true;
+							}
+						}
 					}
-				}
 			}
 			return false;
 	 	}

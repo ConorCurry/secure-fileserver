@@ -38,15 +38,13 @@ public class GroupThread extends Thread
 			final ObjectInputStream input = new ObjectInputStream(socket.getInputStream());
 			final ObjectOutputStream output = new ObjectOutputStream(socket.getOutputStream());
 			
-			SealedObject message_sealed = (SealedObject)input.readObject();
-			Cipher scipher = Cipher.getInstance("AES/CBC/PKCS5Padding", "BC");
-			scipher.init(Cipher.DECRYPT_MODE, privKey);
-			Envelope plain_message = (Envelope)message_sealed.getObject(scipher);
-			Envelope response_a = null;
+			Envelope first_message = ((Envelope)input.readObject()).decrypted(privKey);
+			Envelope response_a = null; //the response for authentication 
 				
-			ArrayList<Object> temp = plain_message.getObjContents();
+			ArrayList<Object> temp = first_message.getObjContents();
 			SecretKey AES_key = null; //store shared sceret key later. 
 			byte[] rndBytes = null;
+		
 			if(temp != null && temp.size() == 4)
 			{
 				//decrypt the sealed object with server's private key 
@@ -54,10 +52,12 @@ public class GroupThread extends Thread
 				dec.init(Cipher.DECRYPT_MODE, privKey);
 				
 				String username = (String)temp.get(0);
-				PublicKey usrPubKey = my_gs.userList.getUserPublicKey(username);
-				//if the user exists 
-				if(usrPubKey != null)
+
+				//if user exists 
+				if(my_gs.userList.checkUser(username))
 				{
+					PublicKey usrPubKey = my_gs.userList.getUserPublicKey(username);
+				
 					Signature sig = Signature.getInstance("RSA", "BC");
 					sig.initVerify(usrPubKey);
 			    	//update original data to be verified and verify the data
@@ -73,13 +73,11 @@ public class GroupThread extends Thread
 							rcipher.init(Cipher.DECRYPT_MODE, privKey);
 				    		byte[] userGeneratedNumber = rcipher.doFinal((byte[])temp.get(1));
 				    		response_a.addObject(userGeneratedNumber);
-
-				    		//get the AES key transmitted 
-				    		rcipher = Cipher.getInstance("RSA", "BC");
-							rcipher.init(Cipher.DECRYPT_MODE, privKey);
-							byte[] encrypted_AES = (byte[])temp.get(2);
-				    		AES_key = new SecretKeySpec(encrypted_AES, 0, encrypted_AES.length, "AES");
 							
+							//get the AES key transmitted 
+							byte[] encrypted_AES = (byte[])temp.get(2);
+							AES_key = new SecretKeySpec(encrypted_AES, 0, encrypted_AES.length, "AES");
+
 							SecureRandom sr = new SecureRandom();
 							rndBytes = new byte[8];
 							sr.nextBytes(rndBytes);
@@ -91,9 +89,7 @@ public class GroupThread extends Thread
 					{
 						response_a = new Envelope("FAIL");
 					}
-				output.writeObject(response_a.encrypted(usrPubKey));
-				output.flush();
-				output.reset();
+					response_a.encrypted(usrPubKey);
 				}
 				else
 				{
@@ -101,20 +97,17 @@ public class GroupThread extends Thread
 				}
 			}
 			else
-			{
-				//what if the user does not existed in the file yet. How to fix it?
-				//response = new Envelope("FAIL");
-				//output.writeObject(response);
-				//output.flush();
-				//output.reset();
+			{	
+				response_a = new Envelope("FAIL");
 			}
+			output.writeObject(response_a);
+			output.flush();
+			output.reset();
 			
-			SealedObject message_sealed_new = (SealedObject)input.readObject();
-			Cipher sdcipher = Cipher.getInstance("AES/CBC/PKCS5Padding", "BC");
-			sdcipher.init(Cipher.DECRYPT_MODE, AES_key);
-			Envelope plain_message_v = (Envelope)message_sealed_new.getObject(sdcipher);
+			Envelope second_message = ((Envelope)input.readObject()).decrypted(AES_key);
+			byte[] to_be_verified = (byte[])second_message.getObjContents().get(0);
 			Envelope response_v = null;
-			byte[] to_be_verified =(byte[]) (plain_message_v).getObjContents().get(0);
+			
 			if(Arrays.equals(to_be_verified, rndBytes))
 			{
 				response_v = new Envelope("OK");
