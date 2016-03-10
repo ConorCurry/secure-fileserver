@@ -11,16 +11,19 @@ public class Token implements UserToken, java.io.Serializable{
     public Token(String gsName, String username, ArrayList<String> accessibleGroups) {
         this.gsName = gsName;
         this.username = username;
-        this.accessibleGroups = new ArrayList<String>(accessibleGroups);
+        if(accessibleGroups != null && !accessibleGroups.isEmpty())
+            this.accessibleGroups = new ArrayList<String>(accessibleGroups); //new concatenation; 
+        else
+            this.accessibleGroups = new ArrayList<String>();
     }
 
     public String getIssuer() {
-        return gsName;        
+        return this.gsName;        
     }
     public String getSubject() {
-        return username;
+        return this.username;
     }
     public List<String> getGroups() {
-        return accessibleGroups;
+        return this.accessibleGroups;
     }
 }

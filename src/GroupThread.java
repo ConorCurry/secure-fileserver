@@ -459,7 +459,7 @@ public class GroupThread extends Thread
 			}
 			else
 			{
-				return false //the requested group does not exist 
+				return false; //the requested group does not exist 
 			}
 		}
 		else
@@ -476,7 +476,8 @@ public class GroupThread extends Thread
 		//Whether this user is the owner of this group?
 		if(my_gs.groupList.checkOwnership(requester, group))
 		{
-            return my_gs.groupList.getMembers(group);
+            ArrayList<String> members = new ArrayList<String>(my_gs.groupList.getMembers(group));//have to create a new instanation
+            return members;
 		}
 		else
 		{
