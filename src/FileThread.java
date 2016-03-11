@@ -15,6 +15,8 @@ import java.security.*;
 public class FileThread extends Thread
 {
 	private final Socket socket;
+	private static final String RSA_METHOD = "RSA/NONE/OAEPWithSHA256AndMGF1Padding";
+	private static final String SYM_METHOD = "AES/CBC/PKCS5Padding";
 
 	public FileThread(Socket _socket)
 	{
@@ -33,9 +35,13 @@ public class FileThread extends Thread
 			SecretKey symKey = null;
 			
 			//TODO: USER AUTHENTICATION PROTOCOL
+			if (!authenticate(symKey)) {
+				socket.close();
+				proceed = false;
+			}
 			Envelope response;
 
-			do
+		   	while (proceed)
 			{
 				Envelope e = (Envelope) ( (SealedObject)input.readObject() ).getObject(symKey);
 				System.out.println("Request received: " + e.getMessage());
@@ -270,7 +276,7 @@ public class FileThread extends Thread
 					socket.close();
 					proceed = false;
 				}
-			} while(proceed);
+			} //end while
 		}
 		catch(Exception e)
 		{
@@ -278,5 +284,45 @@ public class FileThread extends Thread
 			e.printStackTrace(System.err);
 		}
 	}
+	private boolean authenticate(SecretKey AESKey) {
+		Cipher cipher;
+		PrivateKey serverKey = READFILE;
+		PublicKey userKey = null;
+		Envelope challenge = (Envelope)input.readObject();
+		byte[] rand;
+		KeyGenerator keyGen = null;
+		//SecretKey AESKey = null;
 
+		if (challenge == null || !challenge.getMessage().equals("AUTH") || challenge.getObjContents().size() != 2) {
+			return false;
+		}
+		
+		//Stage1 -- handle receiving initial auth request
+		try {
+			cipher.getInstance(RSA_METHOD, "BC");
+			cipher.init(Cipher.DECRYPT_MODE, serverKey);
+			rand = cipher.doFinal( (byte[])challenge.getObjContents().get(0) );
+			userKey = (PublicKey)challenge.getObjContents().get(1);
+			//generate AES256 key
+			keyGen = KeyGenerator.getInstance("AES", "BC");
+			keyGen.init(256, new SecureRandom());
+			AESKey = keyGen.generateKey();
+		} catch (Exception e) {
+			System.err.println("Error in handling auth request (RSA): " + e);
+			return false;
+		}
+
+		//Stage2 -- Auth response
+		Envelope response = new Envelope("AUTH");
+		try {
+			cipher.init(Cipher.ENCRYPT_MODE, userKey);
+			response.addObject(cipher.doFinal(rand));
+			response.addObject(cipher.doFinal(AESKey.getEncoded()));
+			output.writeObject(response);
+		} catch (Exception e) {
+			System.err.println("Error in encrypting auth response (RSA): " + e);
+			return false;
+		}
+		return true; //auth steps complete		
+	}
 }

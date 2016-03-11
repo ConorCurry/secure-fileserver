@@ -5,8 +5,71 @@ import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.util.List;
+import javax.crypto.*;
+import javax.crypto.spec.IvParameterSpec;
+import javax.crypto.spec.SecretKeySpec;
+import java.security.*;
 
 public class FileClient extends Client implements FileClientInterface {
+
+	private static final String RSA_METHOD = "RSA/NONE/OAEPWithSHA256AndMGF1Padding";
+	private static final String SYM_METHOD = "AES/CBC/PKCS5Padding";
+
+	public boolean authenticate(KeyPair usrKeyPair, UserToken token) {
+		PublicKey serverKey = READFILE;
+		Cipher cipherRSA = null;
+		SecureRandom srng = new SecureRandom();
+		//64-bit random challenge
+		byte[] rand = new byte[8];
+		byte[] challenge = new byte[8];
+		SecretKeySpec AESKey = null;
+
+		//TODO: ENCRYPT PUBLIC KEY TO MAINTAIN CONFIDENTIALITY
+
+		//byte[] enc_usr_public_key = null;
+		srng.nextBytes(rand);
+
+		//STAGE1 -- Initialize connecction, prepare challenge
+		Envelope auth = new Envelope("AUTH");
+		try {
+			cipher = Cipher.getInstance(RSA_METHOD, "BC");
+			cipher.init(Cipher.ENCRYPT_MODE, serverKey);
+			challenge = cipher.doFinal(rand);
+			//enc_usr_public_key = cipher.doFinal(usrKeyPair.getEncoded())
+			
+		} catch (Exception e) {
+			System.err.println("Encrypting Challenge Failed (RSA): " + e);
+			return false;
+		}
+		auth.addObject(challenge);
+		auth.addObject(usrKeyPair.getPublic());
+	    		
+		output.writeObject(auth);
+
+		//STAGE2 -- Validate server response & retrieve session key
+		Envelope e = (Envelope)input.readObject();
+		if(e != null && e.getMessage().equals("AUTH") && e.getObjContents.size() == 2) {
+			try {
+				//prepare validation cipher
+				cipher.init(Cipher.DECRYPT_MODE, usrKeyPair.getPrivate());
+				//validate challenge response
+				byte[] challenge_response = cipher.doFinal( (byte[])e.getObjContents().get(0) );
+				if (!Arrays.equals(challenge_response, rand)) {
+					System.out.println("Server authenticity could not be verified");
+					return false;
+				}
+				//retrieve AES256 session key
+				AESKey = new SecretKeySpec(cipher.doFinal( (byte[])e.getObjContents().get(1) ));
+			} catch (Exception e) {
+				System.err.println("Error in validating challenge response / retreiving session key (RSA): " + e);
+				return false;
+			}			
+		} else {
+			System.err.println("Invalid server response");
+			return false;
+		}
+		return true;
+	}
 
 	public boolean delete(String filename, UserToken token) {
 		String remotePath;
@@ -20,7 +83,7 @@ public class FileClient extends Client implements FileClientInterface {
 	    env.addObject(remotePath);
 	    env.addObject(token);
 	    try {
-			output.writeObject(env);
+			output.writeObject(env.encrypted);
 		    env = (Envelope)input.readObject();
 		    
 			if (env.getMessage().compareTo("OK")==0) {
