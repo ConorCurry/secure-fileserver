@@ -3,6 +3,8 @@ import java.util.*;
 import org.bouncycastle.jce.provider.*;
 import javax.crypto.*;
 import java.security.*;
+import javax.crypto.spec.SecretKeySpec;
+import java.security.spec.PKCS8EncodedKeySpec;
 
 public class ClientApp
 {
@@ -43,34 +45,88 @@ public class ClientApp
        
 
         //genereate a 256-bit AES key for securely transmission
-        KeyGenerator key = KeyGenerator.getInstance("AES", "BC");
+        KeyGenerator key = KeyGenerator.getInstance("AES/CBC/PKCS5Padding", "BC");
         key.init(256, new SecureRandom());
         AES_key = key.generateKey();
-        
+      
+        PublicKey pubKey = null;
+        PrivateKey privKey = null;
+
         do {
             System.out.print("Please enter your username to log in: ");
             username = input.nextLine();
             
             //read the key pair file to see whether the user exists already.
-            FileInputStream ufis = new FileInputStream("UserKeyPair.bin");
-            ObjectInputStream userKeysStream = new ObjectInputStream(ufis);
-            Hashtable<String, KeyPair> user_keypair = (Hashtable<String, KeyPair>)userKeysStream.readObject();
+            ObjectInputStream userPubKeysStream = new ObjectInputStream( new FileInputStream("UserPublicKeys.bin"));
+            Hashtable<String, PublicKey> user_publicKeys = (Hashtable<String, PublicKey>)userPubKeysStream.readObject();
             
             //if not, create a new key pair and add it into the file
-            if(!user_keypair.contains(username))
+            if(!user_publicKeys.contains(username))
             {
-                //create a new key pair for this protential user 
-                KeyPairGenerator kpg = KeyPairGenerator.getInstance("RSA", "BC");
+                System.out.print("Please create a password for your account: ");
+                String user_password = input.nextLine();
+
+                //generate a key pair for the first user, store the user and public key in one file, and store the user and the encrypted private key in another file
+                KeyPairGenerator kpg = KeyPairGenerator.getInstance("RSA/NONE/OAEPWithSHA256AndMGF1Padding", "BC");
                 kpg.initialize(3072, new SecureRandom());
                 KeyPair kp = kpg.genKeyPair();
-                user_keypair.put(username, kp);
-                //wrote the updated table back to the file 
-                ObjectOutputStream uKOutStream;
-                uKOutStream = new ObjectOutputStream(new FileOutputStream("UserKeyPair.bin"));
-                uKOutStream.writeObject(user_keypair);
+                pubKey = kp.getPublic();
+                privKey = kp.getPrivate();
+                user_publicKeys.put(username, pubKey);
+                
+                //write the updated table back to the file 
+                ObjectOutputStream uPubKOutStream = new ObjectOutputStream(new FileOutputStream("UserPublicKeys.bin"));
+                uPubKOutStream.writeObject(user_publicKeys);
+                uPubKOutStream.close();
+                
+                //hash the user's password and make it to be the secret key to encrypt the private keys 
+                MessageDigest messageDigest = MessageDigest.getInstance("SHA-256");
+                messageDigest.update(user_password.getBytes());
+                byte[] hashedPassword = messageDigest.digest();
+                
+                //Actually encrypt the user's private key 
+                Cipher ucipher = Cipher.getInstance("AES/CBC/PKCS5Padding", "BC");
+                //create a shared key with the user's hashed password 
+                SecretKey generated_skey = new SecretKeySpec(hashedPassword, 0, hashedPassword.length, "AES/CBC/PKCS5Padding");
+                ucipher.init(Cipher.ENCRYPT_MODE, generated_skey);
+                
+                byte[] key_data = (privKey).getEncoded();
+                byte[] encrypted_data = ucipher.doFinal(key_data);
+                
+                 //read the key pair file to see whether the user exists already.
+                ObjectInputStream userPrivKeysStream = new ObjectInputStream(new FileInputStream("UserPrivateKeys.bin"));
+                Hashtable<String, byte[]> user_privKeys = (Hashtable<String, byte[]>)userPrivKeysStream.readObject();
+                user_privKeys.put(username, encrypted_data);
+
+                //write the updated table back to the file 
+                ObjectOutputStream uPrivKOutStream = new ObjectOutputStream(new FileOutputStream("UserPrivateKeys.bin"));
+                uPrivKOutStream.writeObject(user_privKeys);
+                uPrivKOutStream.close();
             }
-            //get the user's private key from the user's key pair stored in the table 
-            PrivateKey privkey = (user_keypair.get(username)).getPrivate();
+            else
+            {
+                pubKey = user_publicKeys.get(username);
+                System.out.print("Please enter your password: ");
+                String user_password = input.nextLine();
+
+                //hash the user's password and make it to be the secret key to encrypt the private keys 
+                MessageDigest messageDigest = MessageDigest.getInstance("SHA-256");
+                messageDigest.update(user_password.getBytes());
+                byte[] hashedPassword = messageDigest.digest();
+
+                ObjectInputStream userPrivKeysStream = new ObjectInputStream(new FileInputStream("UserPrivateKeys.bin"));
+                Hashtable<String, byte[]> user_privKeys = (Hashtable<String, byte[]>)userPrivKeysStream.readObject();
+                byte[] key_data = user_privKeys.get(username);
+                //decrypt the one read from the file to get the server's private key 
+                Cipher cipher_privKey = Cipher.getInstance("AES/CBC/PKCS5Padding", "BC");
+                //create a shared key with the user's hashed password 
+                SecretKey skey = new SecretKeySpec(hashedPassword, 0, hashedPassword.length, "AES/CBC/PKCS5Padding");
+                cipher_privKey.init(Cipher.DECRYPT_MODE, skey);
+                byte[] decrypted_data = cipher_privKey.doFinal(key_data);
+                
+                KeyFactory kf = KeyFactory.getInstance("RSA/NONE/OAEPWithSHA256AndMGF1Padding");
+                privKey = kf.generatePrivate(new PKCS8EncodedKeySpec(decrypted_data));
+            }
 
             //read in server's public key from the file storing server's public key 
             FileInputStream kfis = new FileInputStream("ServerPublic.bin");
@@ -78,7 +134,7 @@ public class ClientApp
             PublicKey sevPubKey = (PublicKey)serverKeysStream.readObject();
 
             //authenticate process to check whether the authentication succeeds. 
-            boolean verified = groupClient.authenticate(username, privkey, sevPubKey, AES_key);
+            boolean verified = groupClient.authenticate(username, privKey, sevPubKey, AES_key);
             //if the authentication succeeds, then the user can use the AES key to acquire token 
             if(verified)
             {
@@ -241,14 +297,12 @@ public class ClientApp
             String createdUserName = input.nextLine();
 
             //the ADMIN needs to know the public key of the user
-            String userKeyFile = "UserKeyPair.bin";
-            FileInputStream ufis = new FileInputStream(userKeyFile);
-            ObjectInputStream userKeysStream = new ObjectInputStream(ufis);
-            Hashtable<String, KeyPair> user_keypair = (Hashtable<String, KeyPair>)userKeysStream.readObject();
+            ObjectInputStream userKeysStream = new ObjectInputStream(new FileInputStream("UserPublicKeys.bin"));
+            Hashtable<String, PublicKey> user_publicKeys = (Hashtable<String, PublicKey>)userKeysStream.readObject();
             //if the public key already exists, can start to create  that user 
-            if(user_keypair.contains(createdUserName))
+            if(user_publicKeys.contains(createdUserName))
             {
-                if(groupClient.createUser(createdUserName, token, (user_keypair.get(createdUserName)).getPublic()))
+                if(groupClient.createUser(createdUserName, token, (user_publicKeys.get(createdUserName))))
                     System.out.println("Congratulations! You have created user " + createdUserName + " successfully!");
                 else
                     System.out.println("Sorry. You fail to create this user. Please try other options.");

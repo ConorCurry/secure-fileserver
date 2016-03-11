@@ -11,12 +11,14 @@ import java.util.*;
 import org.bouncycastle.jce.provider.*;
 import javax.crypto.*;
 import java.security.*;
+import javax.crypto.spec.SecretKeySpec;
 
 public class GroupServer extends Server {
 
 	public static final int SERVER_PORT = 8765;
 	public UserList userList;
 	public GroupList groupList;
+	public String password;
 
 	public GroupServer() {
 		super(SERVER_PORT, "ALPHA");
@@ -48,6 +50,9 @@ public class GroupServer extends Server {
 			
 			userList = (UserList)userStream.readObject();
 			groupList = (GroupList)groupStream.readObject();
+
+			System.out.print("Please enter a password for the group server: ");
+			password = console.next();
 		}
 		catch(FileNotFoundException e)
 		{
@@ -55,36 +60,83 @@ public class GroupServer extends Server {
 			System.out.println("No users currently exist. Your account will be the administrator.");
 			System.out.print("Enter your username: ");
 			String username = console.next();
+			System.out.print("Please create a password for your account: ");
+			String user_password = console.next();
+			System.out.print("Please create a password for the group server: ");
+			String server_password = console.next();
 
 			try
 			{
-				//generate a key pair for the first user
-				Hashtable <String, KeyPair> user_keypair = new Hashtable <String, KeyPair> ();
-				KeyPairGenerator kpg = KeyPairGenerator.getInstance("RSA", "BC");
+				Security.addProvider(new BouncyCastleProvider());
+				
+				//generate a key pair for the first user, store the user and public key in one file, and store the user and the encrypted private key in another file
+				Hashtable <String, PublicKey> user_publicKeys = new Hashtable <String, PublicKey>();
+				KeyPairGenerator kpg = KeyPairGenerator.getInstance("RSA/NONE/OAEPWithSHA256AndMGF1Padding", "BC");
             	kpg.initialize(3072, new SecureRandom());
            	 	KeyPair kp = kpg.genKeyPair();
-            	user_keypair.put(username, kp);
-	            PublicKey usrPubKey = kp.getPublic();
+            	user_publicKeys.put(username, kp.getPublic());
 	            
-	            //wrote the updated table back to the file 
-	            ObjectOutputStream uKOutStream;
-	            uKOutStream = new ObjectOutputStream(new FileOutputStream("UserKeyPair.bin"));
-	            uKOutStream.writeObject(user_keypair);
+	            //write the updated table back to the file 
+	            ObjectOutputStream uPubKOutStream = new ObjectOutputStream(new FileOutputStream("UserPublicKeys.bin"));
+	            uPubKOutStream.writeObject(user_publicKeys);
+	            uPubKOutStream.close();
 				
+				//hash the user's password and make it to be the secret key to encrypt the private keys 
+				MessageDigest messageDigest = MessageDigest.getInstance("SHA-256");
+				messageDigest.update(user_password.getBytes());
+				byte[] hashedPassword = messageDigest.digest();
+				
+				//Actually encrypt the user's private key 
+				Cipher ucipher = Cipher.getInstance("AES/CBC/PKCS5Padding", "BC");
+				//create a shared key with the user's hashed password 
+				SecretKey generated_skey = new SecretKeySpec(hashedPassword, 0, hashedPassword.length, "AES/CBC/PKCS5Padding");
+				ucipher.init(Cipher.ENCRYPT_MODE, generated_skey);
+				
+				byte[] key_data = (kp.getPrivate()).getEncoded();
+				byte[] encrypted_data = ucipher.doFinal(key_data);
+				
+	            Hashtable <String, byte[]> user_privKeys = new Hashtable <String, byte[]>();
+	            user_privKeys.put(username, encrypted_data);
+
+	            //write the updated table back to the file 
+	            ObjectOutputStream uPrivKOutStream = new ObjectOutputStream(new FileOutputStream("UserPrivateKeys.bin"));
+	            uPrivKOutStream.writeObject(user_privKeys);
+	            uPrivKOutStream.close();
+
 	            //generate a key pair for the server
-	            KeyPairGenerator kpgn = KeyPairGenerator.getInstance("RSA", "BC");
+	            KeyPairGenerator kpgn = KeyPairGenerator.getInstance("RSA/NONE/OAEPWithSHA256AndMGF1Padding", "BC");
 	            kpgn.initialize(3072, new SecureRandom());
 	            KeyPair kpn = kpgn.genKeyPair();
 
 	            //write server's public key to a file 
-	            ObjectOutputStream sKOutStream;
-	            sKOutStream = new ObjectOutputStream(new FileOutputStream("ServerPublic.bin"));
-	            sKOutStream.writeObject(kp.getPublic());
-			
+	            ObjectOutputStream sPubKOutStream = new ObjectOutputStream(new FileOutputStream("ServerPublic.bin"));
+	            sPubKOutStream.writeObject(kp.getPublic());
+	            sPubKOutStream.close();
+				
+				//hash the password and make it to be the secret key to encrypt the private keys 
+				MessageDigest messageDigest2 = MessageDigest.getInstance("SHA-256");
+				messageDigest2.update(server_password.getBytes());
+				byte[] hashedPassword2 = messageDigest2.digest();
+				
+				//Actually encrypt the user's private key 
+				Cipher scipher = Cipher.getInstance("AES/CBC/PKCS5Padding", "BC");
+				//create a shared key with the user's hashed password 
+				SecretKey generated_skey2 = new SecretKeySpec(hashedPassword2, 0, hashedPassword2.length, "AES/CBC/PKCS5Padding");
+				scipher.init(Cipher.ENCRYPT_MODE, generated_skey2);
+				
+				byte[] key_data2 = (kpn.getPrivate()).getEncoded();
+				byte[] encrypted_data2 = scipher.doFinal(key_data2);
+				
+				//write server's encrypted private key to a file 
+	            ObjectOutputStream sPrivKOutStream = new ObjectOutputStream(new FileOutputStream("ServerPrivate.bin"));
+	            sPrivKOutStream.writeObject(encrypted_data2);
+	            sPrivKOutStream.close();
+
+
 				//Create a new list, add current user to the ADMIN group. They now own the ADMIN group.
-				userList = new UserList(kpn);
+				userList = new UserList();
 				groupList = new GroupList();
-				userList.addUser(username, usrPubKey);
+				userList.addUser(username, kp.getPublic());
 				groupList.addGroup("ADMIN", username);
 	            groupList.addMember(username, "ADMIN");
 				userList.addGroup(username, "ADMIN");
@@ -133,9 +185,7 @@ public class GroupServer extends Server {
 			System.err.println("Error: " + e.getMessage());
 			e.printStackTrace(System.err);
 		}
-
 	}
-
 }
 
 //This thread saves the user list

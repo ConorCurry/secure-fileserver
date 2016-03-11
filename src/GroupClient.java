@@ -35,7 +35,7 @@ public class GroupClient extends Client implements GroupClientInterface {
 			message.addObject(encrypted_data);
 	 		
 	 		//generate signature for the encrypted secret key 
-			Signature sig = Signature.getInstance("RSA", "BC");
+			Signature sig = Signature.getInstance("SHA256withRSA", "BC");
 			sig.initSign(usrPrivKey, new SecureRandom());
 			//update encrypted data to be signed and sign the data 
 			sig.update(encrypted_data);
@@ -43,13 +43,12 @@ public class GroupClient extends Client implements GroupClientInterface {
 	 		message.addObject(sigBytes);
 
 	 		//sent object
-	 		message.encrypted(serverPubkey);
-	 		output.writeObject(message);
+	 		output.writeObject(message.encrypted(serverPubkey));
 			output.flush();
 			output.reset();
 		
 			//Get the response from the server
-			response = ((Envelope)input.readObject()).decrypted(usrPrivKey);
+			response = (Envelope)((SealedObject)input.readObject()).getObject(usrPrivKey);
 
 			//if it's null and it's a failure message because the server can't find the user's public key to encrypt the message 
 			//if its not null, it might be a succeess message 
@@ -73,12 +72,11 @@ public class GroupClient extends Client implements GroupClientInterface {
 					    	 	
 					    	 	Envelope second_message = new Envelope ("Verify");
 					    	 	second_message.addObject(serverGeneratedNumber);
-					    	 	second_message.encrypted(AES_key);
-					    	 	output.writeObject(second_message);
+					    	 	output.writeObject(second_message.encrypted(AES_key));
 								output.flush();
 								output.reset();
 								
-								Envelope second_response = ((Envelope)input.readObject()).decrypted(AES_key);
+								Envelope second_response = (Envelope)((SealedObject)input.readObject()).getObject(AES_key);
 					
 								//Successful response
 								if(second_response.getMessage().equals("OK")) return true;

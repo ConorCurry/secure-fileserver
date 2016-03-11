@@ -8,14 +8,9 @@ public class UserList implements java.io.Serializable {
 		 * 
 		 */
 		private static final long serialVersionUID = 7600343803563417992L;
-		private KeyPair serverKeys;
 		private static final char[] blacklist = {'&', '+'};
 		private Hashtable<String, User> list = new Hashtable<String, User>();
 		
-		public UserList(KeyPair serverKeys)
-		{
-			this.serverKeys = serverKeys;
-		}
 
 		public synchronized boolean addUser(String username, PublicKey pubKey)
 		{
@@ -61,11 +56,6 @@ public class UserList implements java.io.Serializable {
 		public synchronized PublicKey getUserPublicKey(String username)
 		{
 			return list.get(username).getPublicKey();
-		}
-
-		public synchronized KeyPair getServerKeyPair()
-		{
-			return serverKeys;
 		}
 		
 		/* add a new group to a user */

@@ -9,6 +9,7 @@ import org.bouncycastle.jce.provider.*;
 import javax.crypto.*;
 import java.security.*;
 import javax.crypto.spec.SecretKeySpec;
+import java.security.spec.PKCS8EncodedKeySpec;
 
 public class GroupThread extends Thread 
 {
@@ -27,9 +28,46 @@ public class GroupThread extends Thread
 	{
 		boolean proceed = true;
 		Security.addProvider(new BouncyCastleProvider());
-		KeyPair serverKeyPair = my_gs.userList.getServerKeyPair();
-		pubKey = serverKeyPair.getPublic();
-		privKey = serverKeyPair.getPrivate();
+		//read the server's public key in and private key in 
+		try
+		{
+			ObjectInputStream sPrivKInStream = new ObjectInputStream(new FileInputStream("ServerPrivate.bin"));    
+			byte[] key_data = (byte[])sPrivKInStream.readObject();
+			sPrivKInStream.close();
+			
+			MessageDigest messageDigest = MessageDigest.getInstance("SHA-256");
+			messageDigest.update((my_gs.password).getBytes());
+			byte[] hashedPassword = messageDigest.digest();
+			
+			//decrypt the one read from the file to get the server's private key 
+			Cipher cipher_privKey = Cipher.getInstance("AES/CBC/PKCS5Padding", "BC");
+			//create a shared key with the user's hashed password 
+			SecretKey skey = new SecretKeySpec(hashedPassword, 0, hashedPassword.length, "AES/CBC/PKCS5Padding");
+			cipher_privKey.init(Cipher.DECRYPT_MODE, skey);
+			byte[] decrypted_data = cipher_privKey.doFinal(key_data);
+			
+			KeyFactory kf = KeyFactory.getInstance("RSA/NONE/OAEPWithSHA256AndMGF1Padding");
+			privKey = kf.generatePrivate(new PKCS8EncodedKeySpec(decrypted_data));
+		        
+		    ObjectInputStream sPubKInStream = new ObjectInputStream(new FileInputStream("ServerPublic.bin"));    
+			pubKey = (PublicKey)sPubKInStream.readObject();
+			sPubKInStream.close();
+		}
+		catch (Exception e)
+		{
+			//fail to get the server' key pairs, exiting 
+			try
+			{
+				socket.close();
+			}
+			catch (Exception en)
+			{
+
+			}
+			System.exit(0);
+		}
+
+
 
 		try
 		{
@@ -38,7 +76,7 @@ public class GroupThread extends Thread
 			final ObjectInputStream input = new ObjectInputStream(socket.getInputStream());
 			final ObjectOutputStream output = new ObjectOutputStream(socket.getOutputStream());
 			
-			Envelope first_message = ((Envelope)input.readObject()).decrypted(privKey);
+			Envelope first_message = (Envelope)input.readObject();
 			Envelope response_a = null; //the response for authentication 
 				
 			ArrayList<Object> temp = first_message.getObjContents();
@@ -89,10 +127,9 @@ public class GroupThread extends Thread
 					{
 						response_a = new Envelope("FAIL");
 					}
-					response_a.encrypted(usrPubKey);
 				}
 				else
-				{
+				{  
 					response_a = new Envelope("FAIL");
 				}
 			}
@@ -100,11 +137,12 @@ public class GroupThread extends Thread
 			{	
 				response_a = new Envelope("FAIL");
 			}
+
 			output.writeObject(response_a);
 			output.flush();
 			output.reset();
 			
-			Envelope second_message = ((Envelope)input.readObject()).decrypted(AES_key);
+			Envelope second_message = (Envelope)input.readObject();
 			byte[] to_be_verified = (byte[])second_message.getObjContents().get(0);
 			Envelope response_v = null;
 			
@@ -116,7 +154,6 @@ public class GroupThread extends Thread
 			{
 				response_v = new Envelope("FAIL");
 			}
-			response_v.encrypted(AES_key);
 			output.writeObject(response_v);
 			output.flush();
 			output.reset();
