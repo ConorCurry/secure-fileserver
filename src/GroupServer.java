@@ -63,7 +63,7 @@ public class GroupServer extends Server {
 			System.out.print("Please create a password for your account: ");
 			String user_password = console.next();
 			System.out.print("Please create a password for the group server: ");
-			String server_password = console.next();
+			password = console.next();
 
 			try
 			{
@@ -88,7 +88,7 @@ public class GroupServer extends Server {
 				byte[] hashedPassword = messageDigest.digest();
 				
 				//Actually encrypt the user's private key 
-				Cipher ucipher = Cipher.getInstance(AES_Method, "BC");
+				Cipher ucipher = Cipher.getInstance("AES", "BC");
 				//create a shared key with the user's hashed password 
 				SecretKey generated_skey = new SecretKeySpec(hashedPassword, 0, hashedPassword.length, "AES");
 				ucipher.init(Cipher.ENCRYPT_MODE, generated_skey);
@@ -116,13 +116,13 @@ public class GroupServer extends Server {
 				
 				//hash the password and make it to be the secret key to encrypt the private keys 
 				MessageDigest messageDigest2 = MessageDigest.getInstance("SHA-256");
-				messageDigest2.update(server_password.getBytes());
+				messageDigest2.update(password.getBytes());
 				byte[] hashedPassword2 = messageDigest2.digest();
 				
 				//Actually encrypt the user's private key 
-				Cipher scipher = Cipher.getInstance(AES_Method, "BC");
+				Cipher scipher = Cipher.getInstance("AES", "BC");
 				//create a shared key with the user's hashed password 
-				SecretKey generated_skey2 = new SecretKeySpec(hashedPassword2, 0, hashedPassword2.length, "AES");
+				SecretKeySpec generated_skey2 = new SecretKeySpec(hashedPassword2, "AES");
 				scipher.init(Cipher.ENCRYPT_MODE, generated_skey2);
 				
 				byte[] key_data2 = (kpn.getPrivate()).getEncoded();
@@ -177,7 +177,9 @@ public class GroupServer extends Server {
 			while(true)
 			{
 				sock = serverSock.accept();
+				System.out.println("Accepted");
 				thread = new GroupThread(sock, this);
+				System.out.println("Start new thread");
 				thread.start();
 			}
 		}

@@ -11,6 +11,7 @@ import java.security.*;
 import javax.crypto.spec.SecretKeySpec;
 import java.security.spec.PKCS8EncodedKeySpec;
 import javax.xml.bind.DatatypeConverter;
+import javax.crypto.spec.IvParameterSpec;
 
 public class GroupThread extends Thread 
 {
@@ -33,36 +34,43 @@ public class GroupThread extends Thread
 		String AES_Method = "AES/CBC/PKCS5Padding";
 		
 		//read the server's public key in and private key in 
+		System.out.println("Fetching group server informations");
 		try
 		{
 			//read in encrypted private key 
 			ObjectInputStream sPrivKInStream = new ObjectInputStream(new FileInputStream("ServerPrivate.bin"));    
 			byte[] key_data = (byte[])sPrivKInStream.readObject();
 			sPrivKInStream.close();
-			
+			System.out.println("Here 1" );
+
 			//generate the secret key to decrypt the private key 
 			MessageDigest messageDigest = MessageDigest.getInstance("SHA-256");
 			messageDigest.update((my_gs.password).getBytes());
 			byte[] hashedPassword = messageDigest.digest();
+			System.out.println("Here 2" );
 			
 			//decrypt the one read from the file to get the server's private key 
 			Cipher cipher_privKey = Cipher.getInstance(AES_Method, "BC");
 			//create a shared key with the user's hashed password 
-			SecretKey skey = new SecretKeySpec(hashedPassword, 0, hashedPassword.length, "AES");
+			SecretKeySpec skey = new SecretKeySpec(hashedPassword, "AES");
 			cipher_privKey.init(Cipher.DECRYPT_MODE, skey);
 			byte[] decrypted_data = cipher_privKey.doFinal(key_data);
+			System.out.println("Here 3" );
 			
 			//recover the private key from the decrypted byte array 
 			KeyFactory kf = KeyFactory.getInstance("RSA", "BC");
 			privKey = kf.generatePrivate(new PKCS8EncodedKeySpec(decrypted_data));
+			System.out.println("Here 4" );
 		        
 		    //read in server's public key
 		    ObjectInputStream sPubKInStream = new ObjectInputStream(new FileInputStream("ServerPublic.bin"));    
 			pubKey = (PublicKey)sPubKInStream.readObject();
 			sPubKInStream.close();
+			System.out.println("Here 5" );
 		}
 		catch (Exception e)
 		{
+		System.err.println("Error: " + e.getMessage());
 			//fail to get the server's key pairs, exiting.....
 			try
 			{
