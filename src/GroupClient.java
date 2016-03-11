@@ -5,26 +5,29 @@ import java.io.*;
 import org.bouncycastle.jce.provider.*;
 import javax.crypto.*;
 import java.security.*;
+import javax.xml.bind.DatatypeConverter;
 
 public class GroupClient extends Client implements GroupClientInterface {
- 
+ 	 private static final String RSA_Method = "RSA/NONE/OAEPWithSHA256AndMGF1Padding";
+	 private static final String AES_Method = "AES/CBC/PKCS5Padding";
 	 //send the user name and challenge to the server 
 	 public boolean authenticate(String username, PrivateKey usrPrivKey, PublicKey serverPubkey, SecretKey AES_key)
 	 {
 	 	try
 	 	{
+
 	 		Security.addProvider(new BouncyCastleProvider());
 	 		
 	 		Envelope message = null;
 	 		Envelope response = null;
-	 		message = new Envelope("CHALLENGE");
+	 		message = new Envelope("CHALLENGE"); //Actually don't care 
 	 		message.addObject(username);
 	 		
 	 		//random generate a 64-bit number, encrypt it, and add that to the message 
 	 		SecureRandom sr = new SecureRandom();
 			byte[] rndBytes = new byte[8];
 			sr.nextBytes(rndBytes);
-	 		Cipher cipher = Cipher.getInstance("RSA", "BC");
+	 		Cipher cipher = Cipher.getInstance(RSA_Method, "BC");
 	 		cipher.init(Cipher.ENCRYPT_MODE, serverPubkey);
 	 		message.addObject(cipher.doFinal(rndBytes));
 	 		
@@ -43,12 +46,12 @@ public class GroupClient extends Client implements GroupClientInterface {
 	 		message.addObject(sigBytes);
 
 	 		//sent object
-	 		output.writeObject(message.encrypted(serverPubkey));
+	 		output.writeObject(message);
 			output.flush();
 			output.reset();
 		
 			//Get the response from the server
-			response = (Envelope)((SealedObject)input.readObject()).getObject(usrPrivKey);
+			response = (Envelope)input.readObject();
 
 			//if it's null and it's a failure message because the server can't find the user's public key to encrypt the message 
 			//if its not null, it might be a succeess message 
@@ -66,20 +69,23 @@ public class GroupClient extends Client implements GroupClientInterface {
 							{
 								
 								//get the server's generated number
-								Cipher rcipher = Cipher.getInstance("RSA", "BC");
+								Cipher rcipher = Cipher.getInstance(RSA_Method, "BC");
 								rcipher.init(Cipher.DECRYPT_MODE, usrPrivKey);
 					    		byte[] serverGeneratedNumber = rcipher.doFinal((byte[])temp.get(1));
 					    	 	
 					    	 	Envelope second_message = new Envelope ("Verify");
 					    	 	second_message.addObject(serverGeneratedNumber);
-					    	 	output.writeObject(second_message.encrypted(AES_key));
+					    	 	output.writeObject(second_message);
 								output.flush();
 								output.reset();
 								
-								Envelope second_response = (Envelope)((SealedObject)input.readObject()).getObject(AES_key);
-					
+								Envelope second_response = (Envelope)input.readObject();
+								Cipher res_dec = Cipher.getInstance(AES_Method, "BC");
+								res_dec.init(Cipher.DECRYPT_MODE, AES_key);
+
 								//Successful response
-								if(second_response.getMessage().equals("OK")) return true;
+								if(DatatypeConverter.printBase64Binary(res_dec.doFinal(second_response.getMessage().getBytes("UTF8"))).equals("OK")) 
+									return true;
 							}
 						}
 					}

@@ -20,6 +20,8 @@ public class ClientApp
     private static SecretKey AES_key;
     private static final int GS_PORT = 8765;
     private static final int FS_PORT = 4321;
+    private static final String RSA_Method = "RSA/NONE/OAEPWithSHA256AndMGF1Padding";
+    private static final String AES_Method = "AES/CBC/PKCS5Padding";
     
     public static void main(String[] args) throws Exception
     {
@@ -67,7 +69,7 @@ public class ClientApp
                 String user_password = input.nextLine();
 
                 //generate a key pair for the first user, store the user and public key in one file, and store the user and the encrypted private key in another file
-                KeyPairGenerator kpg = KeyPairGenerator.getInstance("RSA/NONE/OAEPWithSHA256AndMGF1Padding", "BC");
+                KeyPairGenerator kpg = KeyPairGenerator.getInstance("RSA", "BC");
                 kpg.initialize(3072, new SecureRandom());
                 KeyPair kp = kpg.genKeyPair();
                 pubKey = kp.getPublic();
@@ -85,9 +87,9 @@ public class ClientApp
                 byte[] hashedPassword = messageDigest.digest();
                 
                 //Actually encrypt the user's private key 
-                Cipher ucipher = Cipher.getInstance("AES/CBC/PKCS5Padding", "BC");
+                Cipher ucipher = Cipher.getInstance(AES_Method, "BC");
                 //create a shared key with the user's hashed password 
-                SecretKey generated_skey = new SecretKeySpec(hashedPassword, 0, hashedPassword.length, "AES/CBC/PKCS5Padding");
+                SecretKey generated_skey = new SecretKeySpec(hashedPassword, 0, hashedPassword.length, "AES");
                 ucipher.init(Cipher.ENCRYPT_MODE, generated_skey);
                 
                 byte[] key_data = (privKey).getEncoded();
@@ -118,13 +120,13 @@ public class ClientApp
                 Hashtable<String, byte[]> user_privKeys = (Hashtable<String, byte[]>)userPrivKeysStream.readObject();
                 byte[] key_data = user_privKeys.get(username);
                 //decrypt the one read from the file to get the server's private key 
-                Cipher cipher_privKey = Cipher.getInstance("AES/CBC/PKCS5Padding", "BC");
+                Cipher cipher_privKey = Cipher.getInstance(AES_Method, "BC");
                 //create a shared key with the user's hashed password 
-                SecretKey skey = new SecretKeySpec(hashedPassword, 0, hashedPassword.length, "AES/CBC/PKCS5Padding");
+                SecretKey skey = new SecretKeySpec(hashedPassword, 0, hashedPassword.length, "AES");
                 cipher_privKey.init(Cipher.DECRYPT_MODE, skey);
                 byte[] decrypted_data = cipher_privKey.doFinal(key_data);
                 
-                KeyFactory kf = KeyFactory.getInstance("RSA/NONE/OAEPWithSHA256AndMGF1Padding");
+                KeyFactory kf = KeyFactory.getInstance("RSA", "BC");
                 privKey = kf.generatePrivate(new PKCS8EncodedKeySpec(decrypted_data));
             }
 

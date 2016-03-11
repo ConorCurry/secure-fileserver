@@ -10,6 +10,7 @@ import javax.crypto.*;
 import java.security.*;
 import javax.crypto.spec.SecretKeySpec;
 import java.security.spec.PKCS8EncodedKeySpec;
+import javax.xml.bind.DatatypeConverter;
 
 public class GroupThread extends Thread 
 {
@@ -28,34 +29,41 @@ public class GroupThread extends Thread
 	{
 		boolean proceed = true;
 		Security.addProvider(new BouncyCastleProvider());
+		String RSA_Method = "RSA/NONE/OAEPWithSHA256AndMGF1Padding";
+		String AES_Method = "AES/CBC/PKCS5Padding";
+		
 		//read the server's public key in and private key in 
 		try
 		{
+			//read in encrypted private key 
 			ObjectInputStream sPrivKInStream = new ObjectInputStream(new FileInputStream("ServerPrivate.bin"));    
 			byte[] key_data = (byte[])sPrivKInStream.readObject();
 			sPrivKInStream.close();
 			
+			//generate the secret key to decrypt the private key 
 			MessageDigest messageDigest = MessageDigest.getInstance("SHA-256");
 			messageDigest.update((my_gs.password).getBytes());
 			byte[] hashedPassword = messageDigest.digest();
 			
 			//decrypt the one read from the file to get the server's private key 
-			Cipher cipher_privKey = Cipher.getInstance("AES/CBC/PKCS5Padding", "BC");
+			Cipher cipher_privKey = Cipher.getInstance(AES_Method, "BC");
 			//create a shared key with the user's hashed password 
-			SecretKey skey = new SecretKeySpec(hashedPassword, 0, hashedPassword.length, "AES/CBC/PKCS5Padding");
+			SecretKey skey = new SecretKeySpec(hashedPassword, 0, hashedPassword.length, "AES");
 			cipher_privKey.init(Cipher.DECRYPT_MODE, skey);
 			byte[] decrypted_data = cipher_privKey.doFinal(key_data);
 			
-			KeyFactory kf = KeyFactory.getInstance("RSA/NONE/OAEPWithSHA256AndMGF1Padding");
+			//recover the private key from the decrypted byte array 
+			KeyFactory kf = KeyFactory.getInstance("RSA", "BC");
 			privKey = kf.generatePrivate(new PKCS8EncodedKeySpec(decrypted_data));
 		        
+		    //read in server's public key
 		    ObjectInputStream sPubKInStream = new ObjectInputStream(new FileInputStream("ServerPublic.bin"));    
 			pubKey = (PublicKey)sPubKInStream.readObject();
 			sPubKInStream.close();
 		}
 		catch (Exception e)
 		{
-			//fail to get the server' key pairs, exiting 
+			//fail to get the server's key pairs, exiting.....
 			try
 			{
 				socket.close();
@@ -67,8 +75,6 @@ public class GroupThread extends Thread
 			System.exit(0);
 		}
 
-
-
 		try
 		{
 			//Announces connection and opens object streams
@@ -78,15 +84,17 @@ public class GroupThread extends Thread
 			
 			Envelope first_message = (Envelope)input.readObject();
 			Envelope response_a = null; //the response for authentication 
-				
+			
+
+			//get objects in the message 
 			ArrayList<Object> temp = first_message.getObjContents();
 			SecretKey AES_key = null; //store shared sceret key later. 
 			byte[] rndBytes = null;
-		
+			//first username, second-encrypted number, third- encrypted AES key, forth signed AES key
 			if(temp != null && temp.size() == 4)
 			{
 				//decrypt the sealed object with server's private key 
-				Cipher dec = Cipher.getInstance("RSA", "BC");
+				Cipher dec = Cipher.getInstance(RSA_Method, "BC");
 				dec.init(Cipher.DECRYPT_MODE, privKey);
 				
 				String username = (String)temp.get(0);
@@ -96,7 +104,7 @@ public class GroupThread extends Thread
 				{
 					PublicKey usrPubKey = my_gs.userList.getUserPublicKey(username);
 				
-					Signature sig = Signature.getInstance("RSA", "BC");
+					Signature sig = Signature.getInstance("SHA256withRSA", "BC");
 					sig.initVerify(usrPubKey);
 			    	//update original data to be verified and verify the data
 			    	sig.update((byte[])temp.get(2));
@@ -107,19 +115,25 @@ public class GroupThread extends Thread
 			    	{
 
 							response_a = new Envelope("OK");
-							Cipher rcipher = Cipher.getInstance("RSA", "BC");
+
+							//Get the user generated number and add it to message 
+							Cipher rcipher = Cipher.getInstance(RSA_Method, "BC");
 							rcipher.init(Cipher.DECRYPT_MODE, privKey);
 				    		byte[] userGeneratedNumber = rcipher.doFinal((byte[])temp.get(1));
 				    		response_a.addObject(userGeneratedNumber);
 							
+							//first decrypt to get the original byte data of the AES key 
+							Cipher AES_cipher = Cipher.getInstance(RSA_Method, "BC");
+							AES_cipher.init(Cipher.DECRYPT_MODE, privKey);
+							byte[] decrypted_AES = AES_cipher.doFinal((byte[])temp.get(2));
 							//get the AES key transmitted 
-							byte[] encrypted_AES = (byte[])temp.get(2);
-							AES_key = new SecretKeySpec(encrypted_AES, 0, encrypted_AES.length, "AES");
+							AES_key = new SecretKeySpec(decrypted_AES, 0, decrypted_AES.length, "AES");
 
+							//randomly generate a new random number for verification, and encrypt it with the user's public key 
 							SecureRandom sr = new SecureRandom();
 							rndBytes = new byte[8];
 							sr.nextBytes(rndBytes);
-					 		Cipher cipher = Cipher.getInstance("RSA", "BC");
+					 		Cipher cipher = Cipher.getInstance(RSA_Method, "BC");
 					 		cipher.init(Cipher.ENCRYPT_MODE, usrPubKey);
 					 		response_a.addObject(cipher.doFinal(rndBytes));
 					}
@@ -143,17 +157,23 @@ public class GroupThread extends Thread
 			output.reset();
 			
 			Envelope second_message = (Envelope)input.readObject();
-			byte[] to_be_verified = (byte[])second_message.getObjContents().get(0);
+			byte[] to_be_verified = (byte[])second_message.getObjContents().get(0); //get the number decrypted by the user 
 			Envelope response_v = null;
 			
+			Cipher res_cipher = Cipher.getInstance(AES_Method, "BC");
+			res_cipher.init(Cipher.ENCRYPT_MODE, AES_key);
+
+			byte[] encrypted_data = null;
+			//encrypt the resonse string 
 			if(Arrays.equals(to_be_verified, rndBytes))
 			{
-				response_v = new Envelope("OK");
+				encrypted_data = res_cipher.doFinal(("OK").getBytes("UTF8"));
 			}
 			else
 			{
-				response_v = new Envelope("FAIL");
+				encrypted_data = res_cipher.doFinal(("FAIL").getBytes("UTF8"));
 			}
+			response_v = new Envelope(DatatypeConverter.printBase64Binary(encrypted_data));
 			output.writeObject(response_v);
 			output.flush();
 			output.reset();

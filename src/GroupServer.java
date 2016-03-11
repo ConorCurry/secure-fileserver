@@ -67,11 +67,12 @@ public class GroupServer extends Server {
 
 			try
 			{
+				String AES_Method = "AES/CBC/PKCS5Padding";
 				Security.addProvider(new BouncyCastleProvider());
 				
 				//generate a key pair for the first user, store the user and public key in one file, and store the user and the encrypted private key in another file
 				Hashtable <String, PublicKey> user_publicKeys = new Hashtable <String, PublicKey>();
-				KeyPairGenerator kpg = KeyPairGenerator.getInstance("RSA/NONE/OAEPWithSHA256AndMGF1Padding", "BC");
+				KeyPairGenerator kpg = KeyPairGenerator.getInstance("RSA", "BC");
             	kpg.initialize(3072, new SecureRandom());
            	 	KeyPair kp = kpg.genKeyPair();
             	user_publicKeys.put(username, kp.getPublic());
@@ -87,9 +88,9 @@ public class GroupServer extends Server {
 				byte[] hashedPassword = messageDigest.digest();
 				
 				//Actually encrypt the user's private key 
-				Cipher ucipher = Cipher.getInstance("AES/CBC/PKCS5Padding", "BC");
+				Cipher ucipher = Cipher.getInstance(AES_Method, "BC");
 				//create a shared key with the user's hashed password 
-				SecretKey generated_skey = new SecretKeySpec(hashedPassword, 0, hashedPassword.length, "AES/CBC/PKCS5Padding");
+				SecretKey generated_skey = new SecretKeySpec(hashedPassword, 0, hashedPassword.length, "AES");
 				ucipher.init(Cipher.ENCRYPT_MODE, generated_skey);
 				
 				byte[] key_data = (kp.getPrivate()).getEncoded();
@@ -104,7 +105,7 @@ public class GroupServer extends Server {
 	            uPrivKOutStream.close();
 
 	            //generate a key pair for the server
-	            KeyPairGenerator kpgn = KeyPairGenerator.getInstance("RSA/NONE/OAEPWithSHA256AndMGF1Padding", "BC");
+	            KeyPairGenerator kpgn = KeyPairGenerator.getInstance("RSA", "BC");
 	            kpgn.initialize(3072, new SecureRandom());
 	            KeyPair kpn = kpgn.genKeyPair();
 
@@ -119,9 +120,9 @@ public class GroupServer extends Server {
 				byte[] hashedPassword2 = messageDigest2.digest();
 				
 				//Actually encrypt the user's private key 
-				Cipher scipher = Cipher.getInstance("AES/CBC/PKCS5Padding", "BC");
+				Cipher scipher = Cipher.getInstance(AES_Method, "BC");
 				//create a shared key with the user's hashed password 
-				SecretKey generated_skey2 = new SecretKeySpec(hashedPassword2, 0, hashedPassword2.length, "AES/CBC/PKCS5Padding");
+				SecretKey generated_skey2 = new SecretKeySpec(hashedPassword2, 0, hashedPassword2.length, "AES");
 				scipher.init(Cipher.ENCRYPT_MODE, generated_skey2);
 				
 				byte[] key_data2 = (kpn.getPrivate()).getEncoded();
