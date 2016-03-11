@@ -9,7 +9,8 @@ import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
-import javax.crpyto.*;
+import org.bouncycastle.jce.provider.*;
+import javax.crypto.*;
 import java.security.*;
 
 public class FileThread extends Thread
@@ -17,6 +18,8 @@ public class FileThread extends Thread
 	private final Socket socket;
 	private static final String RSA_METHOD = "RSA/NONE/OAEPWithSHA256AndMGF1Padding";
 	private static final String SYM_METHOD = "AES/CBC/PKCS5Padding";
+	private ObjectInputStream input;
+	private ObjectOutputStream output;
 
 	public FileThread(Socket _socket)
 	{
@@ -30,14 +33,14 @@ public class FileThread extends Thread
 		try
 		{
 			System.out.println("*** New connection from " + socket.getInetAddress() + ":" + socket.getPort() + "***");
-			final ObjectInputStream input = new ObjectInputStream(socket.getInputStream());
-			final ObjectOutputStream output = new ObjectOutputStream(socket.getOutputStream());
-			SecretKey symKey = null;
-			
-			//TODO: USER AUTHENTICATION PROTOCOL
-			if (!authenticate(symKey)) {
+			input = new ObjectInputStream(socket.getInputStream());
+			output = new ObjectOutputStream(socket.getOutputStream());
+			SecretKey symKey;
+		    
+			if ((symKey = authenticate()) == null) {
 				socket.close();
 				proceed = false;
+				System.out.println("Auth failed, closing connection.");
 			}
 			Envelope response;
 
@@ -68,7 +71,7 @@ public class FileThread extends Thread
 				            response.addObject(filenames);
 				        }
 			        }
-			        output.writeObject(response.encrypted());
+			        output.writeObject(response.encrypted(symKey));
 				}
 				if(e.getMessage().equals("UPLOADF"))
 				{
@@ -110,12 +113,12 @@ public class FileThread extends Thread
 								response = new Envelope("READY"); //Success
 								output.writeObject(response.encrypted(symKey));
 
-								Envelope e = (Envelope) ( (SealedObject)input.readObject() ).getObject(symKey);
+								e = (Envelope) ( (SealedObject)input.readObject() ).getObject(symKey);
 								while (e.getMessage().compareTo("CHUNK")==0) {
 									fos.write((byte[])e.getObjContents().get(0), 0, (Integer)e.getObjContents().get(1));
 									response = new Envelope("READY"); //Success
 									output.writeObject(response.encrypted(symKey));
-									Envelope e = (Envelope) ( (SealedObject)input.readObject() ).getObject(symKey);
+									e = (Envelope) ( (SealedObject)input.readObject() ).getObject(symKey);
 								}
 
 								if(e.getMessage().compareTo("EOF")==0) {
@@ -185,7 +188,7 @@ public class FileThread extends Thread
 
 								output.writeObject(e.encrypted(symKey));
 
-								Envelope e = (Envelope) ( (SealedObject)input.readObject() ).getObject(symKey);
+								e = (Envelope) ( (SealedObject)input.readObject() ).getObject(symKey);
 
 
 							}
@@ -198,7 +201,7 @@ public class FileThread extends Thread
 								e = new Envelope("EOF");
 								output.writeObject(e.encrypted(symKey));
 
-								Envelope e = (Envelope) ( (SealedObject)input.readObject() ).getObject(symKey);
+								e = (Envelope) ( (SealedObject)input.readObject() ).getObject(symKey);
 								if(e.getMessage().compareTo("OK")==0) {
 									System.out.printf("File data upload successful\n");
 								}
@@ -278,38 +281,66 @@ public class FileThread extends Thread
 				}
 			} //end while
 		}
-		catch(Exception e)
+		catch(Exception ex)
 		{
-			System.err.println("Error: " + e.getMessage());
-			e.printStackTrace(System.err);
+			System.err.println("Error: " + ex.getMessage());
+			ex.printStackTrace(System.err);
 		}
 	}
-	private boolean authenticate(SecretKey AESKey) {
-		Cipher cipher;
-		PrivateKey serverKey = READFILE;
+
+	//TODO: ADD TIMEOUT FOR AUTH PROCEDURE
+	private SecretKey authenticate() {
+		SecretKey AESKey = null;
+		Cipher cipher = null;
+		PrivateKey serverKey = null;
 		PublicKey userKey = null;
-		Envelope challenge = (Envelope)input.readObject();
+		Envelope challenge = null;
 		byte[] rand;
 		KeyGenerator keyGen = null;
 		//SecretKey AESKey = null;
-
-		if (challenge == null || !challenge.getMessage().equals("AUTH") || challenge.getObjContents().size() != 2) {
-			return false;
+		try {
+			challenge = (Envelope)input.readObject();
+			System.out.println("Authenticating new connection...");
+		} catch (Exception e) {
+			System.err.println("Unable to recieve object: " +  e);
+			return null;
 		}
-		
+		if (challenge == null || !challenge.getMessage().equals("AUTH") || challenge.getObjContents().size() != 2) {
+			return null;
+		}
+		//Stage0 -- load private key
+		try {
+			FileInputStream fis = new FileInputStream("FileServerPrivateKey.bin");
+			ObjectInputStream keyStream = new ObjectInputStream(fis);
+			serverKey = (PrivateKey)keyStream.readObject();
+			keyStream.close();
+			fis.close();
+			if(serverKey == null) { 
+				System.err.println("Unable to load private key");
+				return null; 
+			}
+		} catch (Exception e) {
+			System.err.println("Unable to load private key: " + e);
+			return null;
+		}
 		//Stage1 -- handle receiving initial auth request
 		try {
-			cipher.getInstance(RSA_METHOD, "BC");
+			cipher = Cipher.getInstance(RSA_METHOD, "BC");
 			cipher.init(Cipher.DECRYPT_MODE, serverKey);
 			rand = cipher.doFinal( (byte[])challenge.getObjContents().get(0) );
 			userKey = (PublicKey)challenge.getObjContents().get(1);
+		} catch (Exception ex) {
+			System.err.println("Err in handling auth request part 1: " + ex);
+			return null;
+		}
+		try {
 			//generate AES256 key
 			keyGen = KeyGenerator.getInstance("AES", "BC");
 			keyGen.init(256, new SecureRandom());
 			AESKey = keyGen.generateKey();
-		} catch (Exception e) {
-			System.err.println("Error in handling auth request (RSA): " + e);
-			return false;
+		} catch (Exception ex) {
+			System.err.println("Error in handling auth request (RSA): " + ex);
+			return null;
 		}
 
 		//Stage2 -- Auth response
@@ -319,10 +350,11 @@ public class FileThread extends Thread
 			response.addObject(cipher.doFinal(rand));
 			response.addObject(cipher.doFinal(AESKey.getEncoded()));
 			output.writeObject(response);
-		} catch (Exception e) {
-			System.err.println("Error in encrypting auth response (RSA): " + e);
-			return false;
+		} catch (Exception ex) {
+			System.err.println("Error in encrypting auth response (RSA): " + ex);
+			return null;
 		}
-		return true; //auth steps complete		
+		System.out.println("Authentication complete, success!");
+		return AESKey; //auth steps complete		
 	}
 }
