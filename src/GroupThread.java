@@ -36,16 +36,23 @@ public class GroupThread extends Thread
 		//read the server's public key in and private key in 
 		try
 		{
-			//read in encrypted private key 
-			ObjectInputStream sPrivKInStream = new ObjectInputStream(new FileInputStream("ServerPrivate.bin"));    
-			byte[] key_data = (byte[])sPrivKInStream.readObject();
-			byte[] salt = (byte[])sPrivKInStream.readObject();
-			sPrivKInStream.close();
+			System.out.print("Please enter the password of the group server: ");
+			Scanner input = new Scanner(System.in);
+			String password = input.nextLine();
+			input.close();
 
 			//generate the secret key to decrypt the private key 
 			MessageDigest messageDigest = MessageDigest.getInstance("SHA-256");
-			messageDigest.update((my_gs.password).getBytes());
+			messageDigest.update(password.getBytes());
 			byte[] hashedPassword = messageDigest.digest();
+
+			//read in encrypted private key 
+			ObjectInputStream sPrivKInStream = new ObjectInputStream(new FileInputStream("ServerPrivate.bin"));    
+			ArrayList<byte[]> server_priv_byte = (ArrayList<byte[]>)sPrivKInStream.readObject();
+			//sPrivKInStream.close();
+
+			byte[] key_data = server_priv_byte.get(0);
+			byte[] salt = server_priv_byte.get(1);
 			
 			//decrypt the one read from the file to get the server's private key 
 			Cipher cipher_privKey = Cipher.getInstance(AES_Method, "BC");
@@ -62,12 +69,11 @@ public class GroupThread extends Thread
 		        
 		    //read in server's public key
 		    ObjectInputStream sPubKInStream = new ObjectInputStream(new FileInputStream("ServerPublic.bin"));    
-			pubKey = (PublicKey)sPubKInStream.readObject();
+			pubKey = ((ArrayList<PublicKey>)sPubKInStream.readObject()).get(0);
 			sPubKInStream.close();
 		}
 		catch (Exception e)
 		{
-		System.err.println("Error: " + e.getMessage());
 			//fail to get the server's key pairs, exiting.....
 			try
 			{
@@ -75,7 +81,7 @@ public class GroupThread extends Thread
 			}
 			catch (Exception en)
 			{
-
+				System.err.println("Error: " + en.getMessage());
 			}
 			System.exit(0);
 		}
@@ -89,99 +95,118 @@ public class GroupThread extends Thread
 			
 			Envelope first_message = (Envelope)input.readObject();
 			Envelope response_a = null; //the response for authentication 
-			
-
-			//get objects in the message 
-			ArrayList<Object> temp = first_message.getObjContents();
-			SecretKey AES_key = null; //store shared sceret key later. 
-			byte[] rndBytes = null;
-			//first username, second-encrypted number, third- encrypted AES key, forth signed AES key
-			if(temp != null && temp.size() == 4)
+			SecretKey AES_key = null;
+			//have to do the authentication first 
+			if(first_message.getMessage().equals("CHALLENGE"))
 			{
-				//decrypt the sealed object with server's private key 
-				Cipher dec = Cipher.getInstance(RSA_Method, "BC");
-				dec.init(Cipher.DECRYPT_MODE, privKey);
-				
-				String username = (String)temp.get(0);
+					//get objects in the message 
+					ArrayList<Object> temp = first_message.getObjContents();
+					byte[] rndBytes = null;
+					//first username, second-encrypted number, third- encrypted AES key, forth signed AES key
+					if(temp != null && temp.size() == 4)
+					{
+						//decrypt the sealed object with server's private key 
+						Cipher dec = Cipher.getInstance(RSA_Method, "BC");
+						dec.init(Cipher.DECRYPT_MODE, privKey);
+						
+						String username = (String)temp.get(0);
 
-				//if user exists 
-				if(my_gs.userList.checkUser(username))
-				{
-					PublicKey usrPubKey = my_gs.userList.getUserPublicKey(username);
-				
-					Signature sig = Signature.getInstance("SHA256withRSA", "BC");
-					sig.initVerify(usrPubKey);
-			    	//update original data to be verified and verify the data
-			    	sig.update((byte[])temp.get(2));
-			    	byte[] to_be_verified = (byte[])temp.get(3);
-			    	boolean verified = sig.verify(to_be_verified);
-					//if matches, decrypts to get the AES key, generate a new number and encrypt that with user's public key 
-			    	if(verified)
-			    	{
+						//if user exists 
+						if(my_gs.userList.checkUser(username))
+						{
+							PublicKey usrPubKey = my_gs.userList.getUserPublicKey(username);
+						
+							Signature sig = Signature.getInstance("SHA256withRSA", "BC");
+							sig.initVerify(usrPubKey);
+					    	//update original data to be verified and verify the data
+					    	sig.update((byte[])temp.get(2));
+					    	byte[] to_be_verified = (byte[])temp.get(3);
+					    	boolean verified = sig.verify(to_be_verified);
+					
+							//if matches, decrypts to get the AES key, generate a new number and encrypt that with user's public key 
+					    	if(verified)
+					    	{
 
-							response_a = new Envelope("OK");
+									response_a = new Envelope("OK");
 
-							//Get the user generated number and add it to message 
-							Cipher rcipher = Cipher.getInstance(RSA_Method, "BC");
-							rcipher.init(Cipher.DECRYPT_MODE, privKey);
-				    		byte[] userGeneratedNumber = rcipher.doFinal((byte[])temp.get(1));
-				    		response_a.addObject(userGeneratedNumber);
-							
-							//first decrypt to get the original byte data of the AES key 
-							Cipher AES_cipher = Cipher.getInstance(RSA_Method, "BC");
-							AES_cipher.init(Cipher.DECRYPT_MODE, privKey);
-							byte[] decrypted_AES = AES_cipher.doFinal((byte[])temp.get(2));
-							//get the AES key transmitted 
-							AES_key = new SecretKeySpec(decrypted_AES, 0, decrypted_AES.length, "AES");
+									//Get the user generated number and add it to message 
+									Cipher rcipher = Cipher.getInstance(RSA_Method, "BC");
+									rcipher.init(Cipher.DECRYPT_MODE, privKey);
+						    		byte[] userGeneratedNumber = rcipher.doFinal((byte[])temp.get(1));
+						    		response_a.addObject(userGeneratedNumber);
+									
+									//first decrypt to get the original byte data of the AES key 
+									Cipher AES_cipher = Cipher.getInstance(RSA_Method, "BC");
+									AES_cipher.init(Cipher.DECRYPT_MODE, privKey);
+									byte[] decrypted_AES = AES_cipher.doFinal((byte[])temp.get(2));
+									//get the AES key transmitted 
+									AES_key = (SecretKey)new SecretKeySpec(decrypted_AES, "AES");
 
-							//randomly generate a new random number for verification, and encrypt it with the user's public key 
-							SecureRandom sr = new SecureRandom();
-							rndBytes = new byte[8];
-							sr.nextBytes(rndBytes);
-					 		Cipher cipher = Cipher.getInstance(RSA_Method, "BC");
-					 		cipher.init(Cipher.ENCRYPT_MODE, usrPubKey);
-					 		response_a.addObject(cipher.doFinal(rndBytes));
+
+									//randomly generate a new random number for verification, and encrypt it with the user's public key 
+									SecureRandom sr = new SecureRandom();
+									rndBytes = new byte[8];
+									sr.nextBytes(rndBytes);
+							 		Cipher cipher = Cipher.getInstance(RSA_Method, "BC");
+							 		cipher.init(Cipher.ENCRYPT_MODE, usrPubKey);
+							 		response_a.addObject(cipher.doFinal(rndBytes));
+							}
+							else
+							{
+								response_a = new Envelope("FAIL");
+							}
+						}
+						else
+						{  
+							response_a = new Envelope("FAIL");
+						}
+					}
+					else
+					{	
+						response_a = new Envelope("FAIL");
+					}
+
+					output.writeObject(response_a);
+					output.flush();
+					output.reset();
+					
+					Envelope second_message = (Envelope)input.readObject();
+					byte[] to_be_verified = (byte[])second_message.getObjContents().get(0); //get the number decrypted by the user 
+					Envelope response_v = null;
+					
+					Cipher res_cipher = Cipher.getInstance("AES", "BC");
+					res_cipher.init(Cipher.ENCRYPT_MODE, AES_key);
+
+					byte[] encrypted_data = null;
+					String response_message;
+					//encrypt the resonse string 
+					if(Arrays.equals(to_be_verified, rndBytes))
+					{
+						response_message = "OK";
 					}
 					else
 					{
-						response_a = new Envelope("FAIL");
+						response_message = "FAIL";
 					}
-				}
-				else
-				{  
-					response_a = new Envelope("FAIL");
-				}
-			}
-			else
-			{	
-				response_a = new Envelope("FAIL");
-			}
-
-			output.writeObject(response_a);
-			output.flush();
-			output.reset();
-			
-			Envelope second_message = (Envelope)input.readObject();
-			byte[] to_be_verified = (byte[])second_message.getObjContents().get(0); //get the number decrypted by the user 
-			Envelope response_v = null;
-			
-			Cipher res_cipher = Cipher.getInstance(AES_Method, "BC");
-			res_cipher.init(Cipher.ENCRYPT_MODE, AES_key);
-
-			byte[] encrypted_data = null;
-			//encrypt the resonse string 
-			if(Arrays.equals(to_be_verified, rndBytes))
-			{
-				encrypted_data = res_cipher.doFinal(("OK").getBytes("UTF8"));
+					encrypted_data = res_cipher.doFinal(response_message.getBytes("UTF8"));
+					response_v = new Envelope(response_message);
+					response_v.addObject(encrypted_data);
+					output.writeObject(response_v);
+					output.flush();
+					output.reset();
 			}
 			else
 			{
-				encrypted_data = res_cipher.doFinal(("FAIL").getBytes("UTF8"));
+				try
+				{
+					socket.close();
+				}
+				catch (Exception en)
+				{
+					System.err.println("Error: " + en.getMessage());
+				}
+				System.exit(0);
 			}
-			response_v = new Envelope(DatatypeConverter.printBase64Binary(encrypted_data));
-			output.writeObject(response_v);
-			output.flush();
-			output.reset();
 
 
 			do

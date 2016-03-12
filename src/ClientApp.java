@@ -149,7 +149,7 @@ public class ClientApp
             //read in server's public key from the file storing server's public key 
             FileInputStream kfis = new FileInputStream("ServerPublic.bin");
             ObjectInputStream serverKeysStream = new ObjectInputStream(kfis);
-            PublicKey sevPubKey = (PublicKey)serverKeysStream.readObject();
+            PublicKey sevPubKey = ((ArrayList<PublicKey>)serverKeysStream.readObject()).get(0);
 
             //authenticate process to check whether the authentication succeeds. 
             boolean verified = groupClient.authenticate(username, privKey, sevPubKey, AES_key);
@@ -172,13 +172,10 @@ public class ClientApp
             else
             {
                //authentication fails, users may try again or be logged out 
-                System.out.print("Sorry, the authentication fails. Try again? (y/n): ");
-                String response = input.nextLine();
-                if(!response.equalsIgnoreCase("y")) {
-                    groupClient.disconnect();
-                    input.close();
-                    System.exit(0);
-                }
+                System.out.print("Sorry, the authentication fails. You're forced to quit ");
+                groupClient.disconnect();
+                input.close();
+                System.exit(0);
             }
         }while(masterToken == null);
         

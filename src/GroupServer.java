@@ -21,7 +21,6 @@ public class GroupServer extends Server {
 	public static final int SERVER_PORT = 8765;
 	public UserList userList;
 	public GroupList groupList;
-	public String password;
 
 	public GroupServer() {
 		super(SERVER_PORT, "ALPHA");
@@ -53,9 +52,6 @@ public class GroupServer extends Server {
 			
 			userList = (UserList)userStream.readObject();
 			groupList = (GroupList)groupStream.readObject();
-
-			System.out.print("Please enter a password for the group server: ");
-			password = console.next();
 		}
 		catch(FileNotFoundException e)
 		{
@@ -66,7 +62,7 @@ public class GroupServer extends Server {
 			System.out.print("Please create a password for your account: ");
 			String user_password = console.next();
 			System.out.print("Please create a password for the group server: ");
-			password = console.next();
+			String password = console.next();
 
 			try
 			{
@@ -123,9 +119,11 @@ public class GroupServer extends Server {
 	            kpgn.initialize(3072, new SecureRandom());
 	            KeyPair kpn = kpgn.genKeyPair();
 
+	            ArrayList<PublicKey> server_pub = new ArrayList<PublicKey>();
+	            server_pub.add(kpn.getPublic());
 	            //write server's public key to a file 
 	            ObjectOutputStream sPubKOutStream = new ObjectOutputStream(new FileOutputStream("ServerPublic.bin"));
-	            sPubKOutStream.writeObject(kp.getPublic());
+	            sPubKOutStream.writeObject(server_pub);
 	            sPubKOutStream.close();
 				
 				//hash the password and make it to be the secret key to encrypt the private keys 
@@ -146,10 +144,12 @@ public class GroupServer extends Server {
 				byte[] key_data2 = (kpn.getPrivate()).getEncoded();
 				byte[] encrypted_data2 = scipher.doFinal(key_data2);
 				
+				ArrayList<byte[]> server_priv_salt = new ArrayList<byte[]>();
+				server_priv_salt.add(encrypted_data2);
+				server_priv_salt.add(server_salt);
 				//write server's encrypted private key to a file 
 	            ObjectOutputStream sPrivKOutStream = new ObjectOutputStream(new FileOutputStream("ServerPrivate.bin"));
-	            sPrivKOutStream.writeObject(encrypted_data2);
-	            sPrivKOutStream.writeObject(server_salt); //store server's salt 
+	            sPrivKOutStream.writeObject(server_priv_salt);
 	            sPrivKOutStream.close();
 
 

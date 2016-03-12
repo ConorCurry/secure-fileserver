@@ -5,7 +5,6 @@ import java.io.*;
 import org.bouncycastle.jce.provider.*;
 import javax.crypto.*;
 import java.security.*;
-import javax.xml.bind.DatatypeConverter;
 
 public class GroupClient extends Client implements GroupClientInterface {
  	 private static final String RSA_Method = "RSA/NONE/OAEPWithSHA256AndMGF1Padding";
@@ -27,6 +26,7 @@ public class GroupClient extends Client implements GroupClientInterface {
 	 		SecureRandom sr = new SecureRandom();
 			byte[] rndBytes = new byte[8];
 			sr.nextBytes(rndBytes);
+	 		
 	 		Cipher cipher = Cipher.getInstance(RSA_Method, "BC");
 	 		cipher.init(Cipher.ENCRYPT_MODE, serverPubkey);
 	 		message.addObject(cipher.doFinal(rndBytes));
@@ -80,11 +80,11 @@ public class GroupClient extends Client implements GroupClientInterface {
 								output.reset();
 								
 								Envelope second_response = (Envelope)input.readObject();
-								Cipher res_dec = Cipher.getInstance(AES_Method, "BC");
+								Cipher res_dec = Cipher.getInstance("AES", "BC");
 								res_dec.init(Cipher.DECRYPT_MODE, AES_key);
-
+								byte[] confirm_message = res_dec.doFinal((byte[])second_response.getObjContents().get(0));
 								//Successful response
-								if(DatatypeConverter.printBase64Binary(res_dec.doFinal(second_response.getMessage().getBytes("UTF8"))).equals("OK")) 
+								if(((new String(confirm_message)).equals("OK")) && (second_response.getMessage().equals("OK")))      
 									return true;
 							}
 						}
