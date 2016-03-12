@@ -522,6 +522,12 @@ public class ClientApp
                 fs_name = null;
                 fs_port = 0;
             }
+			System.out.print("Authenticating FileServer...");
+			if(!fileClient.authenticate(token)) {
+				System.out.println("Authentication Failed!");
+			} else {
+				System.out.println("Successfully Authenticated!");
+			}
         }
         System.out.println("Returning to main menu...");
     }
@@ -599,8 +605,8 @@ public class ClientApp
                 String dest = input.nextLine();    
 				System.out.println("Please enter the group you would like to upload to: ");
 				String grp = input.nextLine();
-
-                if(fileClient.upload(src, dest, grp, token)) {
+				success = fileClient.upload(src, dest, grp, token);
+                if(success) {
 					System.out.println("Upload successful!");
                 } else {
 					System.out.print("Upload unsuccessful, try again? (y/n): ");
@@ -623,12 +629,14 @@ public class ClientApp
         if(choice == 1)
         {
             ArrayList<String> allFiles = (ArrayList<String>)fileClient.listFiles(token);
-            if(allFiles.isEmpty())
+            if(allFiles == null || allFiles.isEmpty()) {
                 System.out.println("Sorry, You did not have any file now\n");
-
-            for(String file : allFiles) {
-                System.out.println(file);
-            }
+				
+			} else {
+				for(String file : allFiles) {
+					System.out.println(file);
+				}
+			}
         }
         System.out.println("Returning to main menu...");
     }
