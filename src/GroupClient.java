@@ -9,12 +9,14 @@ import java.security.*;
 public class GroupClient extends Client implements GroupClientInterface {
  	 private static final String RSA_Method = "RSA/NONE/OAEPWithSHA256AndMGF1Padding";
 	 private static final String AES_Method = "AES/CBC/PKCS5Padding";
+	 private static SecretKey AES_key = null;
 	 //send the user name and challenge to the server 
-	 public boolean authenticate(String username, PrivateKey usrPrivKey, PublicKey serverPubkey, SecretKey AES_key)
+	 public boolean authenticate(String username, PrivateKey usrPrivKey, PublicKey serverPubkey, SecretKey AES)
 	 {
 	 	try
 	 	{
 
+	 		AES_key = AES;
 	 		Security.addProvider(new BouncyCastleProvider());
 	 		
 	 		Envelope message = null;
@@ -73,18 +75,14 @@ public class GroupClient extends Client implements GroupClientInterface {
 								rcipher.init(Cipher.DECRYPT_MODE, usrPrivKey);
 					    		byte[] serverGeneratedNumber = rcipher.doFinal((byte[])temp.get(1));
 					    	 	
-					    	 	Envelope second_message = new Envelope ("Verify");
+					    	 	Envelope second_message = new Envelope ("VERIFY");
 					    	 	second_message.addObject(serverGeneratedNumber);
 					    	 	output.writeObject(second_message);
 								output.flush();
 								output.reset();
 								
-								Envelope second_response = (Envelope)input.readObject();
-								Cipher res_dec = Cipher.getInstance("AES", "BC");
-								res_dec.init(Cipher.DECRYPT_MODE, AES_key);
-								byte[] confirm_message = res_dec.doFinal((byte[])second_response.getObjContents().get(0));
-								//Successful response
-								if(((new String(confirm_message)).equals("OK")) && (second_response.getMessage().equals("OK")))      
+								Envelope second_response = (Envelope)((SealedObject)input.readObject()).getObject(AES_key);
+								if((second_response.getMessage()).equals("OK"))
 									return true;
 							}
 						}
@@ -111,12 +109,12 @@ public class GroupClient extends Client implements GroupClientInterface {
 			message = new Envelope("GET");
 			message.addObject(username); //Add user name string
 			//output.reset();
-			output.writeObject(message);
+			output.writeObject(message.encrypted(AES_key));
 			output.flush();
 			output.reset();
 		
 			//Get the response from the server
-			response = (Envelope)input.readObject();
+			response = (Envelope)((SealedObject)input.readObject()).getObject(AES_key);
 			
 			//System.out.printf("Server response msg: %s\n", response.getMessage());
 			//Successful response
@@ -153,11 +151,11 @@ public class GroupClient extends Client implements GroupClientInterface {
 			message = new Envelope("GET_SUBSET");
 			message.addObject(username); //Add user name string
 			message.addObject(groups);
-			output.writeObject(message);
+			output.writeObject(message.encrypted(AES_key));
 			output.reset();
 		
 			//Get the response from the server
-			response = (Envelope)input.readObject();
+			response = (Envelope)((SealedObject)input.readObject()).getObject(AES_key);
 			
 			//Successful response
 			if(response.getMessage().equals("OK"))
@@ -192,9 +190,9 @@ public class GroupClient extends Client implements GroupClientInterface {
 				message.addObject(username); //Add user name string
 				message.addObject(token); //Add the requester's token
 				message.addObject(to_be_added);
-				output.writeObject(message);
+				output.writeObject(message.encrypted(AES_key));
 			
-				response = (Envelope)input.readObject();
+				response = (Envelope)((SealedObject)input.readObject()).getObject(AES_key);
 				
 				//If server indicates success, return true
 				if(response.getMessage().equals("OK"))
@@ -222,9 +220,9 @@ public class GroupClient extends Client implements GroupClientInterface {
 				message = new Envelope("DUSER");
 				message.addObject(username); //Add user name
 				message.addObject(token);  //Add requester's token
-				output.writeObject(message);
+				output.writeObject(message.encrypted(AES_key));
 			
-				response = (Envelope)input.readObject();
+				response = (Envelope)((SealedObject)input.readObject()).getObject(AES_key);
 				
 				//If server indicates success, return true
 				if(response.getMessage().equals("OK"))
@@ -251,9 +249,9 @@ public class GroupClient extends Client implements GroupClientInterface {
 				message = new Envelope("CGROUP");
 				message.addObject(groupname); //Add the group name string
 				message.addObject(token); //Add the requester's token
-				output.writeObject(message); 
+				output.writeObject(message.encrypted(AES_key)); 
 			
-				response = (Envelope)input.readObject();
+				response = (Envelope)((SealedObject)input.readObject()).getObject(AES_key);
 				
 				//If server indicates success, return true
 				if(response.getMessage().equals("OK"))
@@ -280,9 +278,9 @@ public class GroupClient extends Client implements GroupClientInterface {
 				message = new Envelope("DGROUP");
 				message.addObject(groupname); //Add group name string
 				message.addObject(token); //Add requester's token
-				output.writeObject(message); 
+				output.writeObject(message.encrypted(AES_key)); 
 			
-				response = (Envelope)input.readObject();
+				response = (Envelope)((SealedObject)input.readObject()).getObject(AES_key);
 				//If server indicates success, return true
 				if(response.getMessage().equals("OK"))
 				{
@@ -309,9 +307,9 @@ public class GroupClient extends Client implements GroupClientInterface {
 			 message = new Envelope("LMEMBERS");
 			 message.addObject(group); //Add group name string
 			 message.addObject(token); //Add requester's token
-			 output.writeObject(message); 
+			 output.writeObject(message.encrypted(AES_key)); 
 			 
-			 response = (Envelope)input.readObject();
+			 response = (Envelope)((SealedObject)input.readObject()).getObject(AES_key);
 			 
 			 //If server indicates success, return the member list
 			 if(response.getMessage().equals("OK"))
@@ -340,9 +338,9 @@ public class GroupClient extends Client implements GroupClientInterface {
 				message.addObject(username); //Add user name string
 				message.addObject(groupname); //Add group name string
 				message.addObject(token); //Add requester's token
-				output.writeObject(message); 
+				output.writeObject(message.encrypted(AES_key)); 
 			
-				response = (Envelope)input.readObject();
+				response = (Envelope)((SealedObject)input.readObject()).getObject(AES_key);
 				//If server indicates success, return true
 				if(response.getMessage().equals("OK"))
 				{
@@ -369,9 +367,9 @@ public class GroupClient extends Client implements GroupClientInterface {
 				message.addObject(username); //Add user name string
 				message.addObject(groupname); //Add group name string
 				message.addObject(token); //Add requester's token
-				output.writeObject(message);
+				output.writeObject(message.encrypted(AES_key));
 			
-				response = (Envelope)input.readObject();
+				response = (Envelope)((SealedObject)input.readObject()).getObject(AES_key);
 				//If server indicates success, return true
 				if(response.getMessage().equals("OK"))
 				{

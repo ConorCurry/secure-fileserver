@@ -173,27 +173,30 @@ public class GroupThread extends Thread
 					Envelope second_message = (Envelope)input.readObject();
 					byte[] to_be_verified = (byte[])second_message.getObjContents().get(0); //get the number decrypted by the user 
 					Envelope response_v = null;
-					
-					Cipher res_cipher = Cipher.getInstance("AES", "BC");
-					res_cipher.init(Cipher.ENCRYPT_MODE, AES_key);
+					if(second_message.getMessage().equals("VERIFY"))
+					{
+							Cipher res_cipher = Cipher.getInstance("AES", "BC");
+							res_cipher.init(Cipher.ENCRYPT_MODE, AES_key);
 
-					byte[] encrypted_data = null;
-					String response_message;
-					//encrypt the resonse string 
-					if(Arrays.equals(to_be_verified, rndBytes))
-					{
-						response_message = "OK";
+							//byte[] encrypted_data = null;
+							String response_message;
+							//encrypt the resonse string 
+							if(Arrays.equals(to_be_verified, rndBytes))
+							{
+								response_message = "OK";
+							}
+							else
+							{
+								response_message = "FAIL";
+							}
+							//encrypted_data = res_cipher.doFinal(response_message.getBytes("UTF8"));
+							response_v = new Envelope(response_message);
+							//response_v = new Envelope(new String(encrypted_data, "UTF8"));
+							//response_v.addObject(encrypted_data);
+							output.writeObject(response_v.encrypted(AES_key));
+							output.flush();
+							output.reset();
 					}
-					else
-					{
-						response_message = "FAIL";
-					}
-					encrypted_data = res_cipher.doFinal(response_message.getBytes("UTF8"));
-					response_v = new Envelope(response_message);
-					response_v.addObject(encrypted_data);
-					output.writeObject(response_v);
-					output.flush();
-					output.reset();
 			}
 			else
 			{
@@ -211,7 +214,7 @@ public class GroupThread extends Thread
 
 			do
 			{
-				Envelope message = (Envelope)input.readObject();
+				Envelope message = (Envelope)((SealedObject)input.readObject()).getObject(AES_key);
 				System.out.println("Request received: " + message.getMessage());
 				Envelope response = null;
 				
@@ -234,7 +237,7 @@ public class GroupThread extends Thread
 						}
 					   	response.addObject(yourToken);
 					}
-			   		output.writeObject(response);
+			   		output.writeObject(response.encrypted(AES_key));
 				   	output.flush();
 					output.reset();
 				}
@@ -260,7 +263,7 @@ public class GroupThread extends Thread
 						response = new Envelope("OK");
 						response.addObject(yourToken);
 					}
-					output.writeObject(response);
+					output.writeObject(response.encrypted(AES_key));
 					output.flush();
 					output.reset();
 				}
@@ -291,8 +294,9 @@ public class GroupThread extends Thread
 							}
 						}
 					}
-		
-					output.writeObject(response);
+					output.writeObject(response.encrypted(AES_key));
+					output.flush();
+					output.reset();
 				}
 				else if(message.getMessage().equals("DUSER")) //Client wants to delete a user
 				{
@@ -320,7 +324,9 @@ public class GroupThread extends Thread
 						}
 					}
 					
-					output.writeObject(response);
+					output.writeObject(response.encrypted(AES_key));
+					output.flush();
+					output.reset();
 				}
 				else if(message.getMessage().equals("CGROUP")) //Client wants to create a group
 				{
@@ -347,7 +353,9 @@ public class GroupThread extends Thread
 						}
 					}
 		
-					output.writeObject(response);
+					output.writeObject(response.encrypted(AES_key));
+					output.flush();
+					output.reset();
 				}
 				else if(message.getMessage().equals("DGROUP")) //Client wants to delete a group
 				{
@@ -374,7 +382,9 @@ public class GroupThread extends Thread
 						}
 					}
 					
-					output.writeObject(response);
+					output.writeObject(response.encrypted(AES_key));
+					output.flush();
+					output.reset();
 				}
 				else if(message.getMessage().equals("LMEMBERS")) //Client wants a list of members in a group
 				{
@@ -401,7 +411,9 @@ public class GroupThread extends Thread
 							}
 						}
 					}
-					output.writeObject(response);
+					output.writeObject(response.encrypted(AES_key));
+					output.flush();
+					output.reset();
 				}
 				else if(message.getMessage().equals("AUSERTOGROUP")) //Client wants to add user to a group
 				{
@@ -431,7 +443,9 @@ public class GroupThread extends Thread
 							}
 						}
 					}
-					output.writeObject(response);
+					output.writeObject(response.encrypted(AES_key));
+					output.flush();
+					output.reset();
 				}
 				else if(message.getMessage().equals("RUSERFROMGROUP")) //Client wants to remove user from a group
 				{
@@ -461,7 +475,9 @@ public class GroupThread extends Thread
 							}
 						}
 					}
-					output.writeObject(response);
+					output.writeObject(response.encrypted(AES_key));
+					output.flush();
+					output.reset();
 				}
 				else if(message.getMessage().equals("DISCONNECT")) //Client wants to disconnect
 				{
