@@ -8,15 +8,22 @@ import java.util.*;
 		 * 
 		 */
 		private static final long serialVersionUID = 7614180777L;
+		private static final char[] blacklist = {'&', '+'};
 		private Hashtable<String, Group> list = new Hashtable<String, Group>();
 		
-		public synchronized void addGroup(String groupname, String owner)
+		public synchronized boolean addGroup(String groupname, String owner)
 		{
-			Group newGroup = new Group();
-			list.put(groupname, newGroup);
-			//group creation requires an owner
-			this.addOwner(owner, groupname);
-		}
+			for(char invalidChar : blacklist) {
+				if(groupname.indexOf(invalidChar) > 0) {
+					return false;
+				}
+			}
+		   	Group newGroup = new Group();
+	   		list.put(groupname, newGroup);
+   			//group creation requires an owner
+	   		this.addOwner(owner, groupname);
+		   	return true;
+   		}
 		
 		public synchronized void deleteGroup(String groupname)
 		{
@@ -41,9 +48,15 @@ import java.util.*;
 			return list.get(groupname).getMember();
 		}
 		
-		public synchronized void addMember(String user, String groupname) {
-		    list.get(groupname).addMember(user);
-		}
+		public synchronized boolean addMember(String user, String groupname) {
+			for(char invalidChar : blacklist) {
+				if(user.indexOf(invalidChar) > 0) {
+					return false;
+				}
+			} 
+		   	list.get(groupname).addMember(user);
+	   		return true;
+   		}
 		
 		public synchronized void removeMember(String user, String groupname) {
 		    //NOTE: this function does not have the privilege to remove an owner

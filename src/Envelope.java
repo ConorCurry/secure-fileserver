@@ -1,7 +1,11 @@
 import java.util.ArrayList;
+import java.io.Serializable;
+import org.bouncycastle.jce.provider.*;
+import javax.crypto.*;
+import java.security.*;
 
 
-public class Envelope implements java.io.Serializable {
+public class Envelope implements Serializable {
 	
 	/**
 	 * 
@@ -12,6 +16,7 @@ public class Envelope implements java.io.Serializable {
 	
 	public Envelope(String text)
 	{
+		Security.addProvider(new BouncyCastleProvider());
 		msg = text;
 	}
 	
@@ -30,4 +35,16 @@ public class Envelope implements java.io.Serializable {
 		objContents.add(object);
 	}
 
+	public SealedObject encrypted(SecretKey secretKey) {
+		Cipher cipher = null;
+		try {
+			cipher = Cipher.getInstance("AES/CBC/PKCS5Padding", "BC");
+			cipher.init(Cipher.ENCRYPT_MODE, secretKey);
+
+			return new SealedObject(this, cipher);
+		} catch (Exception e) {
+			System.err.println("ENVELOPE ENCRYPTION FAILED (Sym): " + e);
+			return null;
+		}
+	}
 }
