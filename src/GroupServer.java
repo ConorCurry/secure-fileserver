@@ -12,6 +12,9 @@ import org.bouncycastle.jce.provider.*;
 import javax.crypto.*;
 import java.security.*;
 import javax.crypto.spec.SecretKeySpec;
+import javax.xml.bind.DatatypeConverter;
+import javax.xml.bind.DatatypeConverter;
+import javax.crypto.spec.IvParameterSpec;
 
 public class GroupServer extends Server {
 
@@ -87,17 +90,28 @@ public class GroupServer extends Server {
 				messageDigest.update(user_password.getBytes());
 				byte[] hashedPassword = messageDigest.digest();
 				
+				//generate a 16-bit salt
+				SecureRandom random = new SecureRandom();
+        		byte[] user_salt = new byte[16];
+        		random.nextBytes(user_salt);
+
+        		IvParameterSpec user_ivSpec = new IvParameterSpec(user_salt);
+
 				//Actually encrypt the user's private key 
-				Cipher ucipher = Cipher.getInstance("AES", "BC");
+				Cipher ucipher = Cipher.getInstance(AES_Method, "BC");
 				//create a shared key with the user's hashed password 
-				SecretKey generated_skey = new SecretKeySpec(hashedPassword, 0, hashedPassword.length, "AES");
-				ucipher.init(Cipher.ENCRYPT_MODE, generated_skey);
+				SecretKey generated_skey = new SecretKeySpec(hashedPassword, "AES");
+				ucipher.init(Cipher.ENCRYPT_MODE, generated_skey, user_ivSpec);
 				
 				byte[] key_data = (kp.getPrivate()).getEncoded();
 				byte[] encrypted_data = ucipher.doFinal(key_data);
 				
-	            Hashtable <String, byte[]> user_privKeys = new Hashtable <String, byte[]>();
-	            user_privKeys.put(username, encrypted_data);
+				//one for storing salt value 
+	            Hashtable <String, ArrayList<byte[]>> user_privKeys = new Hashtable <String, ArrayList<byte[]>>();
+	            ArrayList<byte[]> salt_priv = new ArrayList<byte[]>();
+	            salt_priv.add(encrypted_data);
+	            salt_priv.add(user_salt);
+	            user_privKeys.put(username, salt_priv);
 
 	            //write the updated table back to the file 
 	            ObjectOutputStream uPrivKOutStream = new ObjectOutputStream(new FileOutputStream("UserPrivateKeys.bin"));
@@ -119,11 +133,15 @@ public class GroupServer extends Server {
 				messageDigest2.update(password.getBytes());
 				byte[] hashedPassword2 = messageDigest2.digest();
 				
+				//generate salt for the server 
+				byte[] server_salt = new byte[16];
+        		random.nextBytes(server_salt);
+        		IvParameterSpec server_ivSpec = new IvParameterSpec(server_salt);
 				//Actually encrypt the user's private key 
-				Cipher scipher = Cipher.getInstance("AES", "BC");
+				Cipher scipher = Cipher.getInstance(AES_Method, "BC");
 				//create a shared key with the user's hashed password 
 				SecretKeySpec generated_skey2 = new SecretKeySpec(hashedPassword2, "AES");
-				scipher.init(Cipher.ENCRYPT_MODE, generated_skey2);
+				scipher.init(Cipher.ENCRYPT_MODE, generated_skey2, server_ivSpec);
 				
 				byte[] key_data2 = (kpn.getPrivate()).getEncoded();
 				byte[] encrypted_data2 = scipher.doFinal(key_data2);
@@ -131,6 +149,7 @@ public class GroupServer extends Server {
 				//write server's encrypted private key to a file 
 	            ObjectOutputStream sPrivKOutStream = new ObjectOutputStream(new FileOutputStream("ServerPrivate.bin"));
 	            sPrivKOutStream.writeObject(encrypted_data2);
+	            sPrivKOutStream.writeObject(server_salt); //store server's salt 
 	            sPrivKOutStream.close();
 
 

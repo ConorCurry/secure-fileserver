@@ -5,6 +5,7 @@ import javax.crypto.*;
 import java.security.*;
 import javax.crypto.spec.SecretKeySpec;
 import java.security.spec.PKCS8EncodedKeySpec;
+import javax.crypto.spec.IvParameterSpec;
 
 public class ClientApp
 {
@@ -47,7 +48,7 @@ public class ClientApp
        
 
         //genereate a 256-bit AES key for securely transmission
-        KeyGenerator key = KeyGenerator.getInstance("AES/CBC/PKCS5Padding", "BC");
+        KeyGenerator key = KeyGenerator.getInstance("AES", "BC");
         key.init(256, new SecureRandom());
         AES_key = key.generateKey();
       
@@ -63,7 +64,7 @@ public class ClientApp
             Hashtable<String, PublicKey> user_publicKeys = (Hashtable<String, PublicKey>)userPubKeysStream.readObject();
             
             //if not, create a new key pair and add it into the file
-            if(!user_publicKeys.contains(username))
+            if(!user_publicKeys.containsKey(username))
             {
                 System.out.print("Please create a password for your account: ");
                 String user_password = input.nextLine();
@@ -89,16 +90,27 @@ public class ClientApp
                 //Actually encrypt the user's private key 
                 Cipher ucipher = Cipher.getInstance(AES_Method, "BC");
                 //create a shared key with the user's hashed password 
-                SecretKey generated_skey = new SecretKeySpec(hashedPassword, 0, hashedPassword.length, "AES");
-                ucipher.init(Cipher.ENCRYPT_MODE, generated_skey);
+                SecretKey generated_skey = new SecretKeySpec(hashedPassword, "AES");
+
+                //generate a 16-bit salt
+                SecureRandom random = new SecureRandom();
+                byte[] user_salt = new byte[16];
+                random.nextBytes(user_salt);
+
+                IvParameterSpec user_ivSpec = new IvParameterSpec(user_salt);
+
+                ucipher.init(Cipher.ENCRYPT_MODE, generated_skey, user_ivSpec);
                 
                 byte[] key_data = (privKey).getEncoded();
                 byte[] encrypted_data = ucipher.doFinal(key_data);
                 
                  //read the key pair file to see whether the user exists already.
                 ObjectInputStream userPrivKeysStream = new ObjectInputStream(new FileInputStream("UserPrivateKeys.bin"));
-                Hashtable<String, byte[]> user_privKeys = (Hashtable<String, byte[]>)userPrivKeysStream.readObject();
-                user_privKeys.put(username, encrypted_data);
+                Hashtable<String, ArrayList<byte[]>> user_privKeys = (Hashtable<String, ArrayList<byte[]>>)userPrivKeysStream.readObject();
+                ArrayList<byte[]> salt_priv = new ArrayList<byte[]>();
+                salt_priv.add(encrypted_data);
+                salt_priv.add(user_salt);
+                user_privKeys.put(username, salt_priv);
 
                 //write the updated table back to the file 
                 ObjectOutputStream uPrivKOutStream = new ObjectOutputStream(new FileOutputStream("UserPrivateKeys.bin"));
@@ -107,6 +119,7 @@ public class ClientApp
             }
             else
             {
+                //read from the existed file 
                 pubKey = user_publicKeys.get(username);
                 System.out.print("Please enter your password: ");
                 String user_password = input.nextLine();
@@ -117,13 +130,16 @@ public class ClientApp
                 byte[] hashedPassword = messageDigest.digest();
 
                 ObjectInputStream userPrivKeysStream = new ObjectInputStream(new FileInputStream("UserPrivateKeys.bin"));
-                Hashtable<String, byte[]> user_privKeys = (Hashtable<String, byte[]>)userPrivKeysStream.readObject();
-                byte[] key_data = user_privKeys.get(username);
+                Hashtable<String, ArrayList<byte[]>> user_privKeys = (Hashtable<String, ArrayList<byte[]>>)userPrivKeysStream.readObject();
+                byte[] key_data = user_privKeys.get(username).get(0);
+                byte[] salt = user_privKeys.get(username).get(1);
+
+                IvParameterSpec user_ivSpec = new IvParameterSpec(salt);
                 //decrypt the one read from the file to get the server's private key 
                 Cipher cipher_privKey = Cipher.getInstance(AES_Method, "BC");
                 //create a shared key with the user's hashed password 
-                SecretKey skey = new SecretKeySpec(hashedPassword, 0, hashedPassword.length, "AES");
-                cipher_privKey.init(Cipher.DECRYPT_MODE, skey);
+                SecretKey skey = new SecretKeySpec(hashedPassword, "AES");
+                cipher_privKey.init(Cipher.DECRYPT_MODE, skey, user_ivSpec);
                 byte[] decrypted_data = cipher_privKey.doFinal(key_data);
                 
                 KeyFactory kf = KeyFactory.getInstance("RSA", "BC");
