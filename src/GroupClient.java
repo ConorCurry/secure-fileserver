@@ -10,14 +10,24 @@ public class GroupClient extends Client implements GroupClientInterface {
  	 private static final String RSA_Method = "RSA/NONE/OAEPWithSHA256AndMGF1Padding";
 	 private static final String AES_Method = "AES/CBC/PKCS5Padding";
 	 private static SecretKey AES_key = null;
+
 	 //send the user name and challenge to the server 
-	 public boolean authenticate(String username, PrivateKey usrPrivKey, PublicKey serverPubkey, SecretKey AES)
+	 public boolean authenticate(String username, PrivateKey usrPrivKey)
 	 {
 	 	try
 	 	{
-
-	 		AES_key = AES;
 	 		Security.addProvider(new BouncyCastleProvider());
+	 		//read in server's public key from the file storing server's public key 
+            FileInputStream kfis = new FileInputStream("ServerPublic.bin");
+            ObjectInputStream serverKeysStream = new ObjectInputStream(kfis);
+            PublicKey serverPubkey = ((ArrayList<PublicKey>)serverKeysStream.readObject()).get(0);
+            kfis.close();
+            serverKeysStream.close();
+
+	 		//genereate a 256-bit AES key for securely transmission
+	        KeyGenerator key = KeyGenerator.getInstance("AES", "BC");
+	        key.init(256, new SecureRandom());
+	        AES_key = key.generateKey();
 	 		
 	 		Envelope message = null;
 	 		Envelope response = null;

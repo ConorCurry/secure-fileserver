@@ -12,8 +12,6 @@ import org.bouncycastle.jce.provider.*;
 import javax.crypto.*;
 import java.security.*;
 import javax.crypto.spec.SecretKeySpec;
-import javax.xml.bind.DatatypeConverter;
-import javax.xml.bind.DatatypeConverter;
 import javax.crypto.spec.IvParameterSpec;
 
 public class GroupServer extends Server {
@@ -21,6 +19,7 @@ public class GroupServer extends Server {
 	public static final int SERVER_PORT = 8765;
 	public UserList userList;
 	public GroupList groupList;
+	public String password;
 
 	public GroupServer() {
 		super(SERVER_PORT, "ALPHA");
@@ -52,6 +51,8 @@ public class GroupServer extends Server {
 			
 			userList = (UserList)userStream.readObject();
 			groupList = (GroupList)groupStream.readObject();
+			System.out.print("Please enter a password for the group server: ");
+			password = console.next();
 		}
 		catch(FileNotFoundException e)
 		{
@@ -62,7 +63,7 @@ public class GroupServer extends Server {
 			System.out.print("Please create a password for your account: ");
 			String user_password = console.next();
 			System.out.print("Please create a password for the group server: ");
-			String password = console.next();
+			password = console.next();
 
 			try
 			{

@@ -23,6 +23,8 @@ public class ClientApp
     private static final int FS_PORT = 4321;
     private static final String RSA_Method = "RSA/NONE/OAEPWithSHA256AndMGF1Padding";
     private static final String AES_Method = "AES/CBC/PKCS5Padding";
+    private static PublicKey pubKey = null;
+    private static PrivateKey privKey = null;
     
     public static void main(String[] args) throws Exception
     {
@@ -45,24 +47,18 @@ public class ClientApp
                 gs_port = GS_PORT;
             }
         } while(!groupClient.connect(gs_name, gs_port));
-       
-
-        //genereate a 256-bit AES key for securely transmission
-        KeyGenerator key = KeyGenerator.getInstance("AES", "BC");
-        key.init(256, new SecureRandom());
-        AES_key = key.generateKey();
-      
-        PublicKey pubKey = null;
-        PrivateKey privKey = null;
 
         do {
             System.out.print("Please enter your username to log in: ");
             username = input.nextLine();
             
             //read the key pair file to see whether the user exists already.
-            ObjectInputStream userPubKeysStream = new ObjectInputStream( new FileInputStream("UserPublicKeys.bin"));
+            FileInputStream uPubis = new FileInputStream("UserPublicKeys.bin");
+            ObjectInputStream userPubKeysStream = new ObjectInputStream(uPubis);
             Hashtable<String, PublicKey> user_publicKeys = (Hashtable<String, PublicKey>)userPubKeysStream.readObject();
-            
+            uPubis.close();
+            userPubKeysStream.close();
+
             //if not, create a new key pair and add it into the file
             if(!user_publicKeys.containsKey(username))
             {
@@ -78,8 +74,10 @@ public class ClientApp
                 user_publicKeys.put(username, pubKey);
                 
                 //write the updated table back to the file 
-                ObjectOutputStream uPubKOutStream = new ObjectOutputStream(new FileOutputStream("UserPublicKeys.bin"));
+                FileOutputStream uPubos = new FileOutputStream("UserPublicKeys.bin");
+                ObjectOutputStream uPubKOutStream = new ObjectOutputStream(uPubos);
                 uPubKOutStream.writeObject(user_publicKeys);
+                uPubos.close();
                 uPubKOutStream.close();
                 
                 //hash the user's password and make it to be the secret key to encrypt the private keys 
@@ -105,16 +103,22 @@ public class ClientApp
                 byte[] encrypted_data = ucipher.doFinal(key_data);
                 
                  //read the key pair file to see whether the user exists already.
-                ObjectInputStream userPrivKeysStream = new ObjectInputStream(new FileInputStream("UserPrivateKeys.bin"));
+                FileInputStream uPrivis = new FileInputStream("UserPrivateKeys.bin");
+                ObjectInputStream userPrivKeysStream = new ObjectInputStream(uPrivis);
                 Hashtable<String, ArrayList<byte[]>> user_privKeys = (Hashtable<String, ArrayList<byte[]>>)userPrivKeysStream.readObject();
+                uPrivis.close();
+                userPrivKeysStream.close();
+
                 ArrayList<byte[]> salt_priv = new ArrayList<byte[]>();
                 salt_priv.add(encrypted_data);
                 salt_priv.add(user_salt);
                 user_privKeys.put(username, salt_priv);
 
                 //write the updated table back to the file 
-                ObjectOutputStream uPrivKOutStream = new ObjectOutputStream(new FileOutputStream("UserPrivateKeys.bin"));
+                FileOutputStream uPrivos = new FileOutputStream("UserPrivateKeys.bin");
+                ObjectOutputStream uPrivKOutStream = new ObjectOutputStream(uPrivos);
                 uPrivKOutStream.writeObject(user_privKeys);
+                uPrivos.close();
                 uPrivKOutStream.close();
             }
             else
@@ -129,8 +133,12 @@ public class ClientApp
                 messageDigest.update(user_password.getBytes());
                 byte[] hashedPassword = messageDigest.digest();
 
-                ObjectInputStream userPrivKeysStream = new ObjectInputStream(new FileInputStream("UserPrivateKeys.bin"));
+                FileInputStream uPrivis = new FileInputStream("UserPrivateKeys.bin");
+                ObjectInputStream userPrivKeysStream = new ObjectInputStream(uPrivis);
                 Hashtable<String, ArrayList<byte[]>> user_privKeys = (Hashtable<String, ArrayList<byte[]>>)userPrivKeysStream.readObject();
+                uPrivis.close();
+                userPrivKeysStream.close();
+
                 byte[] key_data = user_privKeys.get(username).get(0);
                 byte[] salt = user_privKeys.get(username).get(1);
 
@@ -145,14 +153,9 @@ public class ClientApp
                 KeyFactory kf = KeyFactory.getInstance("RSA", "BC");
                 privKey = kf.generatePrivate(new PKCS8EncodedKeySpec(decrypted_data));
             }
-
-            //read in server's public key from the file storing server's public key 
-            FileInputStream kfis = new FileInputStream("ServerPublic.bin");
-            ObjectInputStream serverKeysStream = new ObjectInputStream(kfis);
-            PublicKey sevPubKey = ((ArrayList<PublicKey>)serverKeysStream.readObject()).get(0);
-
+            
             //authenticate process to check whether the authentication succeeds. 
-            boolean verified = groupClient.authenticate(username, privKey, sevPubKey, AES_key);
+            boolean verified = groupClient.authenticate(username, privKey);
             //if the authentication succeeds, then the user can use the AES key to acquire token 
             if(verified)
             {
@@ -523,7 +526,7 @@ public class ClientApp
                 fs_port = 0;
             }
 			System.out.print("Authenticating FileServer...");
-			if(!fileClient.authenticate(token)) {
+			if(!fileClient.authenticate(token, pubKey, privKey)) {
 				System.out.println("Authentication Failed!");
 			} else {
 				System.out.println("Successfully Authenticated!");

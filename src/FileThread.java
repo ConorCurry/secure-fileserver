@@ -10,8 +10,11 @@ import java.io.FileOutputStream;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
 import org.bouncycastle.jce.provider.*;
+import javax.crypto.spec.IvParameterSpec;
 import javax.crypto.*;
 import java.security.*;
+import java.security.spec.PKCS8EncodedKeySpec;
+import javax.crypto.spec.SecretKeySpec;
 
 public class FileThread extends Thread
 {
@@ -289,6 +292,7 @@ public class FileThread extends Thread
 	}
 
 	//TODO: ADD TIMEOUT FOR AUTH PROCEDURE
+	//Verify whether the token is modified or not 
 	private SecretKey authenticate() {
 		SecretKey AESKey = null;
 		Cipher cipher = null;
@@ -308,17 +312,37 @@ public class FileThread extends Thread
 		if (challenge == null || !challenge.getMessage().equals("AUTH") || challenge.getObjContents().size() != 2) {
 			return null;
 		}
+		
 		//Stage0 -- load private key
-		try {
+		try {	
+			//generate the secret key to decrypt the private key 
+			MessageDigest messageDigest = MessageDigest.getInstance("SHA-256");
+			messageDigest.update((FileServer.password).getBytes());
+			byte[] hashedPassword = messageDigest.digest();
+
+			//read in encrypted private key 
 			FileInputStream fis = new FileInputStream("FileServerPrivateKey.bin");
-			ObjectInputStream keyStream = new ObjectInputStream(fis);
-			serverKey = (PrivateKey)keyStream.readObject();
+			ObjectInputStream keyStream = new ObjectInputStream(fis);   
+			ArrayList<byte[]> server_priv_byte = (ArrayList<byte[]>)keyStream.readObject();
 			keyStream.close();
 			fis.close();
-			if(serverKey == null) { 
-				System.err.println("Unable to load private key");
-				return null; 
-			}
+
+			byte[] key_data = server_priv_byte.get(0);
+			byte[] salt = server_priv_byte.get(1);
+			
+			//decrypt the one read from the file to get the server's private key 
+			Cipher cipher_privKey = Cipher.getInstance(SYM_METHOD, "BC");
+			//create a shared key with the user's hashed password 
+			SecretKeySpec skey = new SecretKeySpec(hashedPassword, "AES");
+
+			IvParameterSpec ivSpec = new IvParameterSpec(salt);
+			cipher_privKey.init(Cipher.DECRYPT_MODE, skey, ivSpec);
+			byte[] decrypted_data = cipher_privKey.doFinal(key_data);
+			
+			//recover the private key from the decrypted byte array 
+			KeyFactory kf = KeyFactory.getInstance("RSA", "BC");
+			serverKey = kf.generatePrivate(new PKCS8EncodedKeySpec(decrypted_data));
+
 		} catch (Exception e) {
 			System.err.println("Unable to load private key: " + e);
 			return null;

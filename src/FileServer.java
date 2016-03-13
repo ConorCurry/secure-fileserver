@@ -12,11 +12,16 @@ import java.net.Socket;
 import org.bouncycastle.jce.provider.*;
 import java.security.*;
 import javax.crypto.*;
+import java.util.Scanner;
+import java.util.ArrayList;
+import javax.crypto.spec.SecretKeySpec;
+import javax.crypto.spec.IvParameterSpec;
 
 public class FileServer extends Server {
 	
 	public static final int SERVER_PORT = 4321;
 	public static FileList fileList;
+	public static String password;
 	
 	public FileServer() {
 		super(SERVER_PORT, "FilePile");
@@ -30,27 +35,75 @@ public class FileServer extends Server {
 		Security.addProvider(new BouncyCastleProvider());
 		String fileFile = "FileList.bin";
 		String pubKeyFile = "FileServerPublicKey.bin";
-		PublicKey pubKey;
 		String privKeyFile = "FileServerPrivateKey.bin";
-		PrivateKey privKey;
 		ObjectInputStream fileStream;
 		
 		//This runs a thread that saves the lists on program exit
 		Runtime runtime = Runtime.getRuntime();
 		Thread catchExit = new Thread(new ShutDownListenerFS());
 		runtime.addShutdownHook(catchExit);
-		
+		Scanner console = new Scanner(System.in);
 		//Filelist management
 		try
 		{
 			FileInputStream fis = new FileInputStream(fileFile);
 			fileStream = new ObjectInputStream(fis);
 			fileList = (FileList)fileStream.readObject();
+			System.out.print("Please enter the system's password: ");
+			password = console.nextLine();
+
 		} catch(FileNotFoundException e) {
 			System.out.println("FileList Does Not Exist. Creating FileList...");
 			
 			fileList = new FileList();
+			System.out.print("Please create a system's password: ");
+			password = console.nextLine();
 			
+			//first start the system, start to generate a RSA key pairs for the file server 
+			System.out.print("Generate a new keypair for File Server...");
+			try {
+				//generate a key pair for the server
+	            KeyPairGenerator kpgn = KeyPairGenerator.getInstance("RSA", "BC");
+	            kpgn.initialize(3072, new SecureRandom());
+	            KeyPair kpn = kpgn.genKeyPair();
+
+	            ArrayList<PublicKey> server_pub = new ArrayList<PublicKey>();
+	            server_pub.add(kpn.getPublic());
+	            //write server's public key to a file 
+	            ObjectOutputStream sPubKOutStream = new ObjectOutputStream(new FileOutputStream(pubKeyFile));
+	            sPubKOutStream.writeObject(server_pub);
+	            sPubKOutStream.close();
+				
+				//hash the password and make it to be the secret key to encrypt the private keys 
+				MessageDigest messageDigest = MessageDigest.getInstance("SHA-256");
+				messageDigest.update(password.getBytes());
+				byte[] hashedPassword = messageDigest.digest();
+				
+				//generate salt for the server 
+				SecureRandom random = new SecureRandom();
+				byte[] server_salt = new byte[16];
+        		random.nextBytes(server_salt);
+        		IvParameterSpec server_ivSpec = new IvParameterSpec(server_salt);
+				//Actually encrypt the user's private key 
+				Cipher scipher = Cipher.getInstance("AES/CBC/PKCS5Padding", "BC");
+				//create a shared key with the user's hashed password 
+				SecretKeySpec generated_skey = new SecretKeySpec(hashedPassword, "AES");
+				scipher.init(Cipher.ENCRYPT_MODE, generated_skey, server_ivSpec);
+				
+				byte[] key_data = (kpn.getPrivate()).getEncoded();
+				byte[] encrypted_data = scipher.doFinal(key_data);
+				
+				ArrayList<byte[]> server_priv_salt = new ArrayList<byte[]>();
+				server_priv_salt.add(encrypted_data);
+				server_priv_salt.add(server_salt);
+				//write server's encrypted private key to a file 
+	            ObjectOutputStream sPrivKOutStream = new ObjectOutputStream(new FileOutputStream(privKeyFile));
+	            sPrivKOutStream.writeObject(server_priv_salt);
+	            sPrivKOutStream.close();
+			} catch (Exception ex) {
+				System.err.println("Error creating new keypair: " + ex);
+				System.exit(-1);
+			}
 		} catch(IOException e) {
 			System.out.println("Error reading from FileList file");
 			System.exit(-1);
@@ -58,6 +111,7 @@ public class FileServer extends Server {
 			System.out.println("Error reading from FileList file");
 			System.exit(-1);
 		}
+		console.close();
 
   		//shared_files management
 		File file = new File("shared_files");
@@ -70,53 +124,6 @@ public class FileServer extends Server {
 		else {
 			System.out.println("Error creating shared_files directory");				 
 	    }
-		
-		//keyPair management
-		try {
-			FileInputStream fis = new FileInputStream(pubKeyFile);
-			fileStream = new ObjectInputStream(fis);
-			pubKey = (PublicKey)fileStream.readObject();
-			fileStream.close();
-			fis.close();
-
-			fis = new FileInputStream(privKeyFile);
-			fileStream = new ObjectInputStream(fis);
-			privKey = (PrivateKey)fileStream.readObject();
-			System.out.println("Read key objects");
-			fileStream.close();
-			fis.close();
-		} catch(FileNotFoundException e) {
-			System.out.print("Keys cannot be found, generating a new keypair...");
-			try {
-				KeyPairGenerator keyPairGen = KeyPairGenerator.getInstance("RSA", "BC");
-				keyPairGen.initialize(3072, new SecureRandom());
-				KeyPair pair = keyPairGen.generateKeyPair();
-				
-				FileOutputStream fos = new FileOutputStream(pubKeyFile);
-				ObjectOutputStream keysOut = new ObjectOutputStream(fos);
-				keysOut.writeObject(pair.getPublic());
-				keysOut.close();
-				fos.close();
-
-				fos = new FileOutputStream(privKeyFile);
-				keysOut = new ObjectOutputStream(fos);
-				//TODO: encrypt private key with passphrase
-				keysOut.writeObject(pair.getPrivate());
-				keysOut.close();
-				fos.close();
-			} catch (Exception ex) {
-				System.err.println("Error creating new keypair: " + ex);
-				System.exit(-1);
-			}
-				
-		} catch(IOException e) {
-			System.out.println("Error reading from key files");
-			System.exit(-1);
-		} catch(ClassNotFoundException e) {
-			System.out.println("Error reading from key files");
-			System.exit(-1);
-		} 
-		
 		
 		//Autosave Daemon. Saves lists every 5 minutes
 		AutoSaveFS aSave = new AutoSaveFS();

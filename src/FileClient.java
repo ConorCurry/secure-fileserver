@@ -20,9 +20,8 @@ public class FileClient extends Client implements FileClientInterface {
 	SecretKey symKey;
 
 	//TODO: KEYPAIR AS A PARAMETER
-	public boolean authenticate(/*KeyPair usrKeyPair,*/ UserToken token) {
+	public boolean authenticate(UserToken token, PublicKey usrPubKey, PrivateKey usrPrivKey) {
 		KeyPairGenerator keyPairGen = null;
-		KeyPair usrKeyPair = null;
 		PublicKey serverKey = null;
 		Cipher cipher = null;
 		SecureRandom srng = new SecureRandom();
@@ -30,56 +29,42 @@ public class FileClient extends Client implements FileClientInterface {
 		byte[] rand = new byte[8];
 		byte[] challenge = new byte[8];
 		symKey = null;
-		
-		//TODO: REMOVE KEYPAIR GENERATION, INSTEAD TAKE FROM FILE
-		try {
-			keyPairGen = KeyPairGenerator.getInstance("RSA", "BC");
-			keyPairGen.initialize(3072, new SecureRandom());
-			usrKeyPair = keyPairGen.generateKeyPair();
-		} catch (Exception ex) {
-			System.err.println("Unable to create a keypair for the user: " + ex);
-			return false;
-		}
-		
-		//TODO: ENCRYPT PUBLIC KEY TO MAINTAIN CONFIDENTIALITY
-		//TODO: USE DIFFERENT FILE FOR STORING SERVER PUBLIC KEY
-		try {
-			FileInputStream fis = new FileInputStream("FileServerPublicKey.bin");
-			ObjectInputStream keyStream = new ObjectInputStream(fis);
-			serverKey = (PublicKey)keyStream.readObject();
-			keyStream.close();
-			fis.close();
-			if(serverKey == null) { 
-				System.err.println("Unable to read server public key");
-				return false; 
-			} 
-		} catch (Exception ex) {
-				System.err.println("Unable to read server public key: " + ex);
-				return false;
-		}
-		//byte[] enc_usr_public_key = null;
 		srng.nextBytes(rand);
+
+		try
+		{
+			FileInputStream kfis = new FileInputStream("FileServerPublicKey.bin");
+	        ObjectInputStream serverKeysStream = new ObjectInputStream(kfis);
+	        serverKey = ((ArrayList<PublicKey>)serverKeysStream.readObject()).get(0);
+	        kfis.close();
+	        serverKeysStream.close();
+    	}
+    	catch(Exception ex)
+    	{
+    		System.err.println("Fail to load server's public key" + ex);
+			return false;
+    	}
 
 		//STAGE1 -- Initialize connecction, prepare challenge
 		Envelope auth = new Envelope("AUTH");
 		try {
 			cipher = Cipher.getInstance(RSA_METHOD, "BC");
 			cipher.init(Cipher.ENCRYPT_MODE, serverKey);
-			challenge = cipher.doFinal(rand);
-			//enc_usr_public_key = cipher.doFinal(usrKeyPair.getEncoded())
-			
+			challenge = cipher.doFinal(rand);	
 		} catch (Exception ex) {
 			System.err.println("Encrypting Challenge Failed (RSA): " + ex);
 			return false;
 		}
+
 		try {
 			auth.addObject(challenge);
-			auth.addObject(usrKeyPair.getPublic());	    		
+			auth.addObject(usrPubKey);	    		
 			output.writeObject(auth);
 		} catch (Exception ex) {
 			System.err.println("Error sending authentication request: " + ex);
 			return false;
 		}
+		
 		//STAGE2 -- Validate server response & retrieve session key
 		Envelope env = null;
 		try {
@@ -91,7 +76,7 @@ public class FileClient extends Client implements FileClientInterface {
 		if(env != null && env.getMessage().equals("AUTH") && env.getObjContents().size() == 2) {
 			try {
 				//prepare validation cipher
-				cipher.init(Cipher.DECRYPT_MODE, usrKeyPair.getPrivate());
+				cipher.init(Cipher.DECRYPT_MODE, usrPrivKey);
 				//validate challenge response
 				byte[] challenge_response = cipher.doFinal( (byte[])env.getObjContents().get(0) );
 				if (!Arrays.equals(challenge_response, rand)) {

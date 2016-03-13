@@ -36,20 +36,15 @@ public class GroupThread extends Thread
 		//read the server's public key in and private key in 
 		try
 		{
-			System.out.print("Please enter the password of the group server: ");
-			Scanner input = new Scanner(System.in);
-			String password = input.nextLine();
-			input.close();
-
 			//generate the secret key to decrypt the private key 
 			MessageDigest messageDigest = MessageDigest.getInstance("SHA-256");
-			messageDigest.update(password.getBytes());
+			messageDigest.update((my_gs.password).getBytes());
 			byte[] hashedPassword = messageDigest.digest();
 
 			//read in encrypted private key 
 			ObjectInputStream sPrivKInStream = new ObjectInputStream(new FileInputStream("ServerPrivate.bin"));    
 			ArrayList<byte[]> server_priv_byte = (ArrayList<byte[]>)sPrivKInStream.readObject();
-			//sPrivKInStream.close();
+			sPrivKInStream.close();
 
 			byte[] key_data = server_priv_byte.get(0);
 			byte[] salt = server_priv_byte.get(1);
