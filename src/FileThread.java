@@ -23,6 +23,7 @@ public class FileThread extends Thread
 	private static final String SYM_METHOD = "AES/CBC/PKCS5Padding";
 	private ObjectInputStream input;
 	private ObjectOutputStream output;
+	private PublicKey groupkey;
 
 	public FileThread(Socket _socket)
 	{
@@ -46,6 +47,21 @@ public class FileThread extends Thread
 				System.out.println("Auth failed, closing connection.");
 			}
 			Envelope response;
+			
+			//load group server's public key 
+			try
+			{
+				//read in server's public key from the file storing server's public key 
+	            FileInputStream kfis = new FileInputStream("ServerPublic.bin");
+	            ObjectInputStream serverKeysStream = new ObjectInputStream(kfis);
+	            groupkey = ((ArrayList<PublicKey>)serverKeysStream.readObject()).get(0);
+	            kfis.close();
+	            serverKeysStream.close();
+			}
+			catch(Exception ex)
+			{
+				System.out.println("Fail to load public key" + ex);
+			}
 
 		   	while (proceed)
 			{
@@ -292,7 +308,7 @@ public class FileThread extends Thread
 	}
 
 	//TODO: ADD TIMEOUT FOR AUTH PROCEDURE
-	//Verify whether the token is modified or not 
+	
 	private SecretKey authenticate() {
 		SecretKey AESKey = null;
 		Cipher cipher = null;
