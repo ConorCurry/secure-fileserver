@@ -646,7 +646,7 @@ public class ClientApp
     
     public static void printGroups()
     {
-        ArrayList<String> groups = new ArrayList<>(token.getGroups());
+        ArrayList<String> groups = new ArrayList<String>(token.getGroups());
         if(groups != null && groups.size() != 0)
         {
             System.out.println("Here are your groups");
@@ -668,7 +668,7 @@ public class ClientApp
 			System.out.println("Invalid token");
 			return;
 		}
-		ArrayList<String> groups = new ArrayList<>(workingtoken.getGroups());
+		ArrayList<String> groups = new ArrayList<String>(workingtoken.getGroups());
         if(groups != null && groups.size() != 0)
         {
             System.out.println("Here are your groups");

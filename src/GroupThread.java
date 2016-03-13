@@ -537,7 +537,7 @@ public class GroupThread extends Thread
 		if(my_gs.userList.checkUser(requester))
 		{
 			//Get the user's groups
-			ArrayList<String> temp = new ArrayList<>(yourToken.getGroups());
+			ArrayList<String> temp = new ArrayList<String>(yourToken.getGroups());
 			//requester needs to be an administrator
 			if(temp.contains("ADMIN"))
 			{
@@ -570,7 +570,7 @@ public class GroupThread extends Thread
 		//Does requester exist?
 		if(my_gs.userList.checkUser(requester))
 		{
-			ArrayList<String> temp = new ArrayList<>(yourToken.getGroups());
+			ArrayList<String> temp = new ArrayList<String>(yourToken.getGroups());
 			//requester needs to be an administer
 			if(temp.contains("ADMIN"))
 			{
