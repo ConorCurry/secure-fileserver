@@ -128,7 +128,10 @@ public class GroupThread extends Thread
 									Cipher rcipher = Cipher.getInstance(RSA_Method, "BC");
 									rcipher.init(Cipher.DECRYPT_MODE, privKey);
 						    		byte[] userGeneratedNumber = rcipher.doFinal((byte[])temp.get(1));
-						    		response_a.addObject(userGeneratedNumber);
+						    		MessageDigest messageDigest = MessageDigest.getInstance("SHA-256");
+									messageDigest.update(userGeneratedNumber);
+									byte[] hashedNumber = messageDigest.digest();
+						    		response_a.addObject(hashedNumber);
 									
 									//first decrypt to get the original byte data of the AES key 
 									Cipher AES_cipher = Cipher.getInstance(RSA_Method, "BC");
@@ -167,6 +170,7 @@ public class GroupThread extends Thread
 					
 					Envelope second_message = (Envelope)input.readObject();
 					byte[] to_be_verified = (byte[])second_message.getObjContents().get(0); //get the number decrypted by the user 
+					
 					Envelope response_v = null;
 					if(second_message.getMessage().equals("VERIFY"))
 					{
@@ -176,7 +180,10 @@ public class GroupThread extends Thread
 							//byte[] encrypted_data = null;
 							String response_message;
 							//encrypt the resonse string 
-							if(Arrays.equals(to_be_verified, rndBytes))
+							MessageDigest messageDigest = MessageDigest.getInstance("SHA-256");
+							messageDigest.update(rndBytes);
+							byte[] hashedNumber = messageDigest.digest();
+							if(Arrays.equals(to_be_verified, hashedNumber))
 							{
 								response_message = "OK";
 							}
