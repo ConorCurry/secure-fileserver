@@ -247,15 +247,7 @@ public class ClientApp
                     connectFileserver();
                     break;
                 case 2:
-                    try
-                    {
                         cuser();
-                    }
-                    catch (Exception e)
-                    {
-                        System.err.println("Error: " + e.getMessage());
-                        e.printStackTrace(System.err);
-                    }
                     break;
                 case 3:
                     duser();
@@ -303,7 +295,7 @@ public class ClientApp
 		}
 	}
         
-    public static void cuser() throws Exception
+    public static void cuser()
     {
         System.out.print("You have chose to create user. Press 1 to continue. Press other number to go back to main menu: ");
         choice = input.nextInt();
@@ -313,12 +305,23 @@ public class ClientApp
 			System.out.println("Disallowed characters: '&' and  ','");
             System.out.print("Please Enter the Username you would like to create: ");
             String createdUserName = input.nextLine();
-
-            //the ADMIN needs to know the public key of the user
-            ObjectInputStream userKeysStream = new ObjectInputStream(new FileInputStream("UserPublicKeys.bin"));
-            Hashtable<String, PublicKey> user_publicKeys = (Hashtable<String, PublicKey>)userKeysStream.readObject();
+            Hashtable<String, PublicKey> user_publicKeys = null;
+            try
+            {
+                //the ADMIN needs to know the public key of the user
+                ObjectInputStream userKeysStream = new ObjectInputStream(new FileInputStream("UserPublicKeys.bin"));
+                user_publicKeys = (Hashtable<String, PublicKey>)userKeysStream.readObject();
+                userKeysStream.close();
+            }
+            catch (Exception exn)
+            {
+                System.out.println("can't load users' public keys to check whether the key exsits already." + exn);
+                /*
+                System.err.println("Error: " + e.getMessage());
+                e.printStackTrace(System.err);*/
+            }
             //if the public key already exists, can start to create  that user 
-            if(user_publicKeys.contains(createdUserName))
+            if(user_publicKeys.containsKey(createdUserName))
             {
                 if(groupClient.createUser(createdUserName, token, (user_publicKeys.get(createdUserName))))
                     System.out.println("Congratulations! You have created user " + createdUserName + " successfully!");
@@ -344,7 +347,46 @@ public class ClientApp
             System.out.print("Please Enter the Username you would like to delete: ");
             String deletedUserName = input.nextLine();
             if(groupClient.deleteUser(deletedUserName, token))
+            {
                 System.out.println("Congratulations! You have deleted user " + deletedUserName + " successfully!");
+                
+                try
+                {
+                    //read the key pair file to see whether the user exists already.
+                    FileInputStream uPubis = new FileInputStream("UserPublicKeys.bin");
+                    ObjectInputStream userPubKeysStream = new ObjectInputStream(uPubis);
+                    Hashtable<String, PublicKey> user_publicKeys = (Hashtable<String, PublicKey>)userPubKeysStream.readObject();
+                    uPubis.close();
+                    userPubKeysStream.close();
+                    user_publicKeys.remove(deletedUserName);
+
+                    //write the updated table back to the file 
+                    FileOutputStream uPubos = new FileOutputStream("UserPublicKeys.bin");
+                    ObjectOutputStream uPubKOutStream = new ObjectOutputStream(uPubos);
+                    uPubKOutStream.writeObject(user_publicKeys);
+                    uPubos.close();
+                    uPubKOutStream.close();
+
+                    //also delete the user information saved on the file? 
+                    FileInputStream uPrivis = new FileInputStream("UserPrivateKeys.bin");
+                    ObjectInputStream userPrivKeysStream = new ObjectInputStream(uPrivis);
+                    Hashtable<String, ArrayList<byte[]>> user_privKeys = (Hashtable<String, ArrayList<byte[]>>)userPrivKeysStream.readObject();
+                    uPrivis.close();
+                    userPrivKeysStream.close();
+                    user_privKeys.remove(deletedUserName);
+
+                    //write the updated table back to the file 
+                    FileOutputStream uPrivos = new FileOutputStream("UserPrivateKeys.bin");
+                    ObjectOutputStream uPrivKOutStream = new ObjectOutputStream(uPrivos);
+                    uPrivKOutStream.writeObject(user_privKeys);
+                    uPrivos.close();
+                    uPrivKOutStream.close();
+                }
+                catch(Exception exn)
+                {
+                    System.out.println("Updating keys after removing a user fails." + exn);
+                }
+            }
             else
                 System.out.println("Sorry. You fail to delete this user. Please try other options.");
         }
@@ -486,7 +528,7 @@ public class ClientApp
                 String groupName = selectGroup();
                 if(!groupName.equals(""))
                 {
-                    List<String> members = groupClient.listMembers(groupName, token);
+                    List<String> members = new ArrayList<String>(groupClient.listMembers(groupName, token));
                     if(members != null && !members.isEmpty())
                     {
                         System.out.println("\nCongratulations! You have fetched all the members from the group " + groupName + " successfully!");
@@ -716,6 +758,7 @@ public class ClientApp
 		masterToken = groupClient.getToken(username);
         printGroups(masterToken);
 		if(masterToken == null) {
+            System.out.println("Sorry, you can't change your working groups because your master token is not valid");
 			return;
 		}
         if(masterToken.getGroups().size() > 0)
@@ -745,11 +788,33 @@ public class ClientApp
 			token = groupClient.getToken(username, groups);
 			System.out.println("successfully updated token!");
         }
+        else
+        {
+            System.out.println("Sorry, you can't change your working groups because you are not in any group yet");
+        }
     }
 
     public static boolean groupsCheck()
     {
-        printGroups(token);
+        if(token == null) {
+            System.out.println("Invalid token");
+            return false;
+        }
+        ArrayList<String> groups = new ArrayList<String>(token.getGroups());
+        if(groups != null && groups.size() != 0)
+        {
+            System.out.println("Here are your groups");
+            int i = 0;
+            for(; i < groups.size(); i++)
+            {
+                System.out.println(""+ (i+1) + ". " + groups.get(i));
+            }
+        } 
+        else 
+        {
+            System.out.println("Sorry. You don't belong to any group yet. Try to be in group first!");
+            return false;
+        }
         System.out.print("Does this list include the group you want to work on? (y/n): ");
         if((input.nextLine()).charAt(0) == 'y')
             return true;
@@ -762,17 +827,21 @@ public class ClientApp
         char response;
         do
         {
-            printGroups(token);
-            System.out.print("Please enter the group name you would like to operate on: ");
-            String groupName = input.nextLine();
 			if(token.getGroups().size() == 0) {
 				System.out.println("You don't belong to any groups yet.");
 				group_to_be_returned = "";
                 break;
 			}
-            else if(token.getGroups().contains(groupName)) {
-				group_to_be_returned = groupName;
-                break;
+            else 
+            {
+                printGroups(token);
+                System.out.print("Please enter the group name you would like to operate on: ");
+                String groupName = input.nextLine();
+                if(token.getGroups().contains(groupName))
+                {
+				    group_to_be_returned = groupName;
+                    break;
+                }
 			}
             System.out.println("Sorry, your entered name is not valid, please try again. If you would like to choose a group not in the list, you need to change your working groups");
 			System.out.print("Would you like to try again? (y/n): ");
