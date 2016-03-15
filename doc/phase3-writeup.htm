@@ -29,8 +29,7 @@ Yijia Cui: yic66@pitt.edu       Conor Curry: clc231@pitt.edu
       <h2>Overview</h2>
 <!-- BEGIN CHANGES HERE -->
 
-<p>In this section, broadly overview the types of cryptographic techniques that
-your group has decided to use to address threats T1â€“T4.</p>
+<p>A single protocoal can never be sufficient to ensure the security of communications. The most common hybird protocl is the combination of asymmetric key crypotography and symmtric key crypotograhy. In our implementations of a secure file system, we use RSA public/private key encryption to achive the authentications between the users and the servers. An AES key (256-bit) will also be securely transmitted during the process of authentication, which will be used to protect the security of file contents and also user tokens. Furthermore, because the malicious modification of user tokens will lead to the unauthorized access to the file server, the verification of the tokens needs to be done. In our protocol, we concatenate each fields of the token and hash that string with SHA256 and sign the hashed string digitally with RSA key pairs.</p>
 
 <!-- END CHANGES HERE -->
     </section>
@@ -38,7 +37,7 @@ your group has decided to use to address threats T1â€“T4.</p>
       <h2>Threat T1: Unauthorized Token Issuance</h2>
 <!-- BEGIN CHANGES HERE -->
 
-<p>A user needs to acquire a token to access the group server and the file server as well. However, it is not trustworthy that everyone who acquires the token is an authroized user. The system developed in phase 2 only needs a username to get a token from the group user, which is insesure because anyone can get that token as long as they know the username. If an adversary can know the username, he/she could access all the information related to that user stored on the group server and also all the files accessible to that username. As a result, the authentication of the user should be deployed before a token is issued. Also, the adversary can be a man in the middle, pretends to be the server and gets the messages passed from the user to the server, and then uses that information to pretend to be the user. Thus, it is also necessary for the system to authenticate the group server during this process.</p>
+<p>A user needs to acquire a token from the group server to access the group server and the file servers. However, it is not trustworthy that everyone who acquires the token is an authroized user. The system developed in phase 2 only needs a username to get a token from the group user, which is insesure because anyone can get that token as long as they know the username. If an adversary can know the username, he/she could access all the information related to that user stored on the group server and also all the files accessible to that username. As a result, the authentication of the user should be deployed before a token is issued. Also, the adversary can be a man in the middle, pretends to be the server and gets the messages passed from the user to the server, and then uses that information to pretend to be the user. Thus, it is also necessary for the system to authenticate the group server during this process.</p>
 
 <p>The proposed mechanism for user authentication is the to use RSA public/private keys to exchange a nonce and AES symmetric key.We will use highly secure key sizes (3072-bit RSA and 256-bit AES).</p>
 
@@ -104,9 +103,12 @@ above-documented approach? Did you end up designing a really interesting
 protocol suite that addresses multiple threats at once? Use this space to show
 off your hard work!</p>
 
-<p>If your group did any extra credit, please discuss that in this section, as
-well.</p>
+<p>In this phase, we have implemented lots of extra credits.</p>
+<p>First, we have fixed the least privilege principle in phase2. We add the function that the user needs to select the group they want to work on, and the group server will re-issue them a token only with the groups they have requested. If they would like to switch to other groups, they need to re-select the groups again, and the group server will replace the user's token with the new one.</p>
 
+<p>Second, we have implemented challenges with RSA key pairs for the mutual-authentication between the users and the group server. This implementation saves the space to store the users' password(or hashed password).</p>
+
+<p>Lastly, we have implemented secure storage of private keys. Instead of storing private keys directly, we ask the user/the server for a password, which will be hashed and salted, working as a secret key, to encrypt the private keys. And we will store those encrypted private keys and associated salt values into files. Next time, if the users/the server need their own private key, they need to put their password to generate the same secrete key and recover the private key.</p>
 <!-- END CHANGES HERE -->
     </section>
   </body>
