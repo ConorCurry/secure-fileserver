@@ -78,7 +78,7 @@ public class GroupThread extends Thread
 			{
 				System.err.println("Error: " + en.getMessage());
 			}
-			System.exit(0);
+			proceed = false; //skip the loop
 		}
 
 		try
@@ -124,10 +124,11 @@ public class GroupThread extends Thread
 
 									response_a = new Envelope("OK");
 
-									//Get the user generated number and add it to message 
+									//Get the user generated number and add its hashed value to message 
 									Cipher rcipher = Cipher.getInstance(RSA_Method, "BC");
 									rcipher.init(Cipher.DECRYPT_MODE, privKey);
 						    		byte[] userGeneratedNumber = rcipher.doFinal((byte[])temp.get(1));
+						    		
 						    		MessageDigest messageDigest = MessageDigest.getInstance("SHA-256");
 									messageDigest.update(userGeneratedNumber);
 									byte[] hashedNumber = messageDigest.digest();
@@ -169,7 +170,7 @@ public class GroupThread extends Thread
 					output.reset();
 					
 					Envelope second_message = (Envelope)input.readObject();
-					byte[] to_be_verified = (byte[])second_message.getObjContents().get(0); //get the number decrypted by the user 
+					byte[] to_be_verified = (byte[])second_message.getObjContents().get(0); //get the hashed number decrypted by the user 
 					
 					Envelope response_v = null;
 					if(second_message.getMessage().equals("VERIFY"))
@@ -177,12 +178,13 @@ public class GroupThread extends Thread
 							Cipher res_cipher = Cipher.getInstance("AES", "BC");
 							res_cipher.init(Cipher.ENCRYPT_MODE, AES_key);
 
-							//byte[] encrypted_data = null;
+							
 							String response_message;
-							//encrypt the resonse string 
+							//hash the server generated data to see whether it's the same as the one received by the user 
 							MessageDigest messageDigest = MessageDigest.getInstance("SHA-256");
 							messageDigest.update(rndBytes);
 							byte[] hashedNumber = messageDigest.digest();
+
 							if(Arrays.equals(to_be_verified, hashedNumber))
 							{
 								response_message = "OK";
@@ -191,10 +193,8 @@ public class GroupThread extends Thread
 							{
 								response_message = "FAIL";
 							}
-							//encrypted_data = res_cipher.doFinal(response_message.getBytes("UTF8"));
+							//encrypt the response by AES_key from now on
 							response_v = new Envelope(response_message);
-							//response_v = new Envelope(new String(encrypted_data, "UTF8"));
-							//response_v.addObject(encrypted_data);
 							output.writeObject(response_v.encrypted(AES_key));
 							output.flush();
 							output.reset();
@@ -210,7 +210,7 @@ public class GroupThread extends Thread
 				{
 					System.err.println("Error: " + en.getMessage());
 				}
-				System.exit(0);
+				proceed = false; //skip the loop
 			}
 
 

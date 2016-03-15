@@ -77,9 +77,12 @@ public class GroupClient extends Client implements GroupClientInterface {
 						if(temp != null && temp.size() == 2)
 						{
 							byte[] numberFromServer = (byte[])temp.get(0);
+
+							//hashed the user's randomly generated number to see whether the server sends the same one 
 							MessageDigest messageDigest = MessageDigest.getInstance("SHA-256");
 							messageDigest.update(rndBytes);
 							byte[] hashedNumber = messageDigest.digest();
+							
 							if(Arrays.equals(numberFromServer, hashedNumber))
 							{
 								
@@ -88,6 +91,7 @@ public class GroupClient extends Client implements GroupClientInterface {
 								rcipher.init(Cipher.DECRYPT_MODE, usrPrivKey);
 					    		byte[] serverGeneratedNumber = rcipher.doFinal((byte[])temp.get(1));
 					    	 	
+					    	 	//hash the response of the user 
 					    	 	MessageDigest messageDigest2 = MessageDigest.getInstance("SHA-256");
 								messageDigest2.update(serverGeneratedNumber);
 								byte[] hashedNumber2 = messageDigest2.digest();

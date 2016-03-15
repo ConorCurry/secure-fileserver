@@ -429,7 +429,6 @@ public class ClientApp
         input.nextLine();
         if(choice == 1)
         {
-            printGroups(token);
             boolean stayinGroups = groupsCheck();
             if(stayinGroups)
             {
