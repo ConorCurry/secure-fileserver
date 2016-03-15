@@ -213,10 +213,9 @@ public class GroupThread extends Thread
 				proceed = false; //skip the loop
 			}
 
-
-			do
+			while(proceed)
 			{
-				Envelope message = (Envelope)((SealedObject)input.readObject()).getObject(AES_key);
+				Envelope message = (Envelope)(((SealedObject)input.readObject()).getObject(AES_key));
 				System.out.println("Request received: " + message.getMessage());
 				Envelope response = null;
 				
@@ -491,7 +490,7 @@ public class GroupThread extends Thread
 				//	response = new Envelope("FAIL"); //Server does not understand client request
 				//	output.writeObject(response);
 				//}
-			}while(proceed);	
+			}	
 		}
 		catch(Exception e)
 		{
