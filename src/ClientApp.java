@@ -59,6 +59,7 @@ public class ClientApp
             uPubis.close();
             userPubKeysStream.close();
 
+            boolean existed = false;
             //if not, create a new key pair and add it into the file
             if(!user_publicKeys.containsKey(username))
             {
@@ -123,6 +124,8 @@ public class ClientApp
             }
             else
             {
+                existed = true;
+
                 //read from the existed file 
                 pubKey = user_publicKeys.get(username);
                 System.out.print("Please enter your password: ");
@@ -153,9 +156,12 @@ public class ClientApp
                 KeyFactory kf = KeyFactory.getInstance("RSA", "BC");
                 privKey = kf.generatePrivate(new PKCS8EncodedKeySpec(decrypted_data));
             }
-            
-            //authenticate process to check whether the authentication succeeds. 
-            boolean verified = groupClient.authenticate(username, privKey);
+            boolean verified = false;
+            if(existed)
+            {
+                //authenticate process to check whether the authentication succeeds. 
+               verified = groupClient.authenticate(username, privKey);
+            }
             //if the authentication succeeds, then the user can use the AES key to acquire token 
             if(verified)
             {
