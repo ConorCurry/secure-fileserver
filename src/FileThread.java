@@ -396,14 +396,16 @@ public class FileThread extends Thread
 		//Stage2 -- Auth response
 		Envelope response = new Envelope("AUTH");
 		try {
+			MessageDigest messageDigest = MessageDigest.getInstance("SHA-256");
+			messageDigest.update(rand);
 			cipher.init(Cipher.ENCRYPT_MODE, userKey);
 			ByteArrayOutputStream msg = new ByteArrayOutputStream();
-			msg.write(rand);
+			msg.write(messageDigest.digest());
 			msg.write(AESKey.getEncoded());
 			response.addObject(cipher.doFinal(msg.toByteArray()));
 			output.writeObject(response);
 		} catch (Exception ex) {
-			System.err.println("Error in encrypting auth response (RSA): " + ex);
+			System.err.println("Error in encrypting/hashing auth response (RSA/SHA-256): " + ex);
 			return null;
 		}
 		System.out.println("Authentication complete, success!");

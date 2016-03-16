@@ -92,7 +92,7 @@ Yijia Cui: yic66@pitt.edu       Conor Curry: clc231@pitt.edu
 <!-- BEGIN CHANGES HERE -->
 
 <p>Passive monitoring can easily break confidentiality guarantees that we want to provide. Information about the users’ identities, tokens, and files are all vulnerable to passive monitoring. AES256 symmetric key cryptography will be the method we use to provide secure communication channels. These keys will be shared via already described authentication procedures, and will allow for computationally efficient secure communication (as opposed to attempting to encrypt large files with RSA).</p>
-<p>We will use AES256 in OFB mode to secure the required message and file communication. OFB mode is useful for allowing precomputation of the encryption, which will allow speedy file access from the server, and reduces redundant recomputation of encryption. This will help reduce load and prevent denial of service attacks against file servers. These session keys are shared in the authentication procedure between the respective server and the user, and are randomly generated each time a authenticates. This will prevent attacks resulting from key overuse. </p>
+<p>We will use AES256 in CBC mode to secure the required message and file communication. These session keys are shared in the authentication procedure between the respective server and the user, and are randomly generated each time a authenticates. This will prevent attacks resulting from key overuse. </p>
 <p>Because the AES keys are shared during secure authentication, only the user and the server will be able to decrypt the messages and files sent between them. This will successfully address the problem of passive monitoring, by creating a secure tunnel for communication between the user and server.</p>
 
 
