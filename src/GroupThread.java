@@ -215,7 +215,16 @@ public class GroupThread extends Thread
 
 			while(proceed)
 			{
-				Envelope message = (Envelope)(((SealedObject)input.readObject()).getObject(AES_key));
+				Envelope message;
+				Object read_object = input.readObject();
+				if(read_object.getClass().getName().equals("Envelope"))
+				{
+					message = (Envelope)read_object;
+				}
+				else
+				{
+				 	message = (Envelope)(((SealedObject)read_object).getObject(AES_key));
+				}
 				System.out.println("Request received: " + message.getMessage());
 				Envelope response = null;
 				
