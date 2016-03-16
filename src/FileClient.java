@@ -19,7 +19,6 @@ public class FileClient extends Client implements FileClientInterface {
 	private static final String SYM_METHOD = "AES/CBC/PKCS5Padding";
 	SecretKey symKey;
 
-	//TODO: KEYPAIR AS A PARAMETER
 	public boolean authenticate(UserToken token, PublicKey usrPubKey, PrivateKey usrPrivKey) {
 		KeyPairGenerator keyPairGen = null;
 		PublicKey serverKey = null;
@@ -73,14 +72,17 @@ public class FileClient extends Client implements FileClientInterface {
 			System.err.println("Error recieving authentication response: " + ex);
 			return false;
 		}
-		if(env != null && env.getMessage().equals("AUTH") ) {//&& env.getObjContents().size() == 1) {
+		if(env != null && env.getMessage().equals("AUTH") && env.getObjContents().size() == 1) {
 			try {
+				MessageDigest messageDigest = MessageDigest.getInstance("SHA-256");
 				//prepare validation cipher
 				cipher.init(Cipher.DECRYPT_MODE, usrPrivKey);
 				//validate challenge response
 				byte[] resp = cipher.doFinal( (byte[])env.getObjContents().get(0) );
-				byte[] challenge_resp = Arrays.copyOfRange(resp,0,rand.length);
-				if (!Arrays.equals(challenge_resp, rand)) {
+				messageDigest.update(rand);
+				byte[] challenge_resp = Arrays.copyOfRange(resp,0,messageDigest.getDigestLength());
+				
+				if (!Arrays.equals(challenge_resp, messageDigest.digest())) {
 					System.out.println("Server authenticity could not be verified");
 					return false;
 				}
