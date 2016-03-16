@@ -1,4 +1,0 @@
-extra credit: 
-
-We have implemented the the principle of least privilege. The user will be shown their groups when log in and they need to choose the one to work on instead of being exposed to all the groups.
-They can see and change their groups as long as put the corresponding option.
