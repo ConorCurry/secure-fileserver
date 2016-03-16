@@ -73,18 +73,19 @@ public class FileClient extends Client implements FileClientInterface {
 			System.err.println("Error recieving authentication response: " + ex);
 			return false;
 		}
-		if(env != null && env.getMessage().equals("AUTH") && env.getObjContents().size() == 2) {
+		if(env != null && env.getMessage().equals("AUTH") ) {//&& env.getObjContents().size() == 1) {
 			try {
 				//prepare validation cipher
 				cipher.init(Cipher.DECRYPT_MODE, usrPrivKey);
 				//validate challenge response
-				byte[] challenge_response = cipher.doFinal( (byte[])env.getObjContents().get(0) );
-				if (!Arrays.equals(challenge_response, rand)) {
+				byte[] resp = cipher.doFinal( (byte[])env.getObjContents().get(0) );
+				byte[] challenge_resp = Arrays.copyOfRange(resp,0,rand.length);
+				if (!Arrays.equals(challenge_resp, rand)) {
 					System.out.println("Server authenticity could not be verified");
 					return false;
 				}
 				//retrieve AES256 session key
-				symKey = (SecretKey)new SecretKeySpec(cipher.doFinal( (byte[])env.getObjContents().get(1) ), "AES");
+				symKey = (SecretKey)new SecretKeySpec(Arrays.copyOfRange(resp,rand.length,resp.length), "AES");
 			} catch (Exception e) {
 				System.err.println("Error in validating challenge response / retreiving session key (RSA): " + e);
 				return false;

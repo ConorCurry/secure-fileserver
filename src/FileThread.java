@@ -9,6 +9,7 @@ import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
+import java.io.ByteArrayOutputStream;
 import org.bouncycastle.jce.provider.*;
 import javax.crypto.spec.IvParameterSpec;
 import javax.crypto.*;
@@ -387,8 +388,10 @@ public class FileThread extends Thread
 		Envelope response = new Envelope("AUTH");
 		try {
 			cipher.init(Cipher.ENCRYPT_MODE, userKey);
-			response.addObject(cipher.doFinal(rand));
-			response.addObject(cipher.doFinal(AESKey.getEncoded()));
+			ByteArrayOutputStream msg = new ByteArrayOutputStream();
+			msg.write(rand);
+			msg.write(AESKey.getEncoded());
+			response.addObject(cipher.doFinal(msg.toByteArray()));
 			output.writeObject(response);
 		} catch (Exception ex) {
 			System.err.println("Error in encrypting auth response (RSA): " + ex);
