@@ -71,7 +71,7 @@ Yijia Cui: yic66@pitt.edu       Conor Curry: clc231@pitt.edu
 
 <p>We must be assured that unauthorized file servers may not pose as legitimate servers. An illegitimate file server is a very serious security vulnerability, as it could easily perform man-in-the-middle attacks by impersonating the file server to the user, and impersonating the user to the file server. This would allow it to not only corrupt files, but modify them in transit, or even completely fabricate them. It would also break confidentiality by being able to see what files the user is requesting from the group server. It also would obviously be able to steal user tokens that were issued by the group server, seriously compromising user security.</p>
 
-<p>The method we will use to confront these issues, and to properly authenticate the file server rely on a hybrid approach involving RSA’s public key cryptography, and AES symmetric keys. We will use highly secure key sizes (3072-bit RSA and 256-bit AES). The authentication between the user and file server will not leak information if trying to authenticate an unauthorized file server, and will be resistant to reflection attacks and man in the middle attacks. This protocol requires that the user is confident that they know the authentic file server’s public key before initiating the procedure. The authorization procedure is as follows:</p>
+<p>The method we will use to confront these issues, and to properly authenticate the file server rely on a hybrid approach involving RSA’s public key cryptography, SHA-256 hashing, and AES symmetric keys. We will use highly secure key sizes (3072-bit RSA and 256-bit AES). The authentication between the user and file server will not leak information if trying to authenticate an unauthorized file server, and will be resistant to reflection attacks and man in the middle attacks. This protocol requires that the user is confident that they know the authentic file server’s public key before initiating the procedure. The authorization procedure is as follows:</p>
 
 <p>The user’s cryptographic material includes the ticket (including ticket signature from the group server) for the user. This needs to remain secret to all except the user, group server, and authentic file servers. The user will also have a RSA keypair. </p>
 
@@ -79,10 +79,13 @@ Yijia Cui: yic66@pitt.edu       Conor Curry: clc231@pitt.edu
 
 <p>The authentication procedure begins with the user initiating a connection with the file server, and sending a secure random number, encrypted with the server’s public key. This is concatenated with the user’s public key.</p>
 
-<p>If authentic, the file server will be able to decrypt the random number. Using the user’s provided public key, the file server will hash the user’s random number by SHA-256 and it will be concatenated with a randomly generated AES256 key, encrypted by the user's public key and signed by the server's private key.</p>
+<p>If authentic, the file server will be able to decrypt the random number. Using the user’s provided public key, the file server will hash the user’s random number by SHA-256 and it will be concatenated with a randomly generated AES256 key. The concatenation of the two is then encrypted with the user's public key.</p>
 
-<p>The user will then hash his/her own random number by SHA-256, and check equality of the provided hashed number with that. If they match, this proves the validity of the file server to the user. Also, the user will verify the digital signature of the encrypted AES key, making sure that the AES key is issued by the file server exactly. The user will then decrypt the encrypted AES key, and the two will be able to begin secured communication of messages and files using the provided AES256 session key.</p>
+<p>The user will then decrypt the server's response using their private key. The user hashes his/her own random number by SHA-256, and check equality of the provided hashed number. If they match, this proves the validity of the file server to the user. Using the AES key, the two will be able to begin secured communication of messages and files using the provided AES256 session key. </p>
 <img src = "fs_authentication.png" alt="Mountain View" style="width:400px;height:228px;">
+
+<p>The fileserver also verifies every subsequent request with the token the user must provide. This will provide another barrier against success of man-in-the-middle attacks.</p>
+
 <p>As long as the user has access to the file server’s public key ahead of time, the server will be able to prove it’s authenticity using the random number challenge, and the user is able to authenticate the file server, by commutativity. The user can verify the identify of the AES key, preventing it to be replaced by the adversary. Furthermore, the hashed number prevents the file server to generate a signature by decrypting a malicious message by its own private key.</p>
 
 <!-- END CHANGES HERE -->
