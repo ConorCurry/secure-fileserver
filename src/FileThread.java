@@ -66,7 +66,16 @@ public class FileThread extends Thread
 
 		   	while (proceed)
 			{
-				Envelope e = (Envelope) ( (SealedObject)input.readObject() ).getObject(symKey);
+				Envelope e;
+				Object read_object = input.readObject();
+				if(read_object.getClass().getName().equals("Envelope"))
+				{
+					e = (Envelope)read_object;
+				}
+				else
+				{
+				 	e = (Envelope)(((SealedObject)read_object).getObject(symKey));
+				}
 				System.out.println("Request received: " + e.getMessage());
 
 				// Handler to list files that this user is allowed to see
@@ -223,7 +232,7 @@ public class FileThread extends Thread
 
 								e = (Envelope) ( (SealedObject)input.readObject() ).getObject(symKey);
 								if(e.getMessage().compareTo("OK")==0) {
-									System.out.printf("File data upload successful\n");
+									System.out.printf("File data download successful\n");
 								}
 								else {
 

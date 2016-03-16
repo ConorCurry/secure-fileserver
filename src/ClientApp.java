@@ -653,16 +653,27 @@ public class ClientApp
                 String src = input.nextLine();
                 System.out.print("Please enter your destination file path: ");
                 String dest = input.nextLine();    
-				System.out.println("Please enter the group you would like to upload to: ");
-				String grp = input.nextLine();
-				success = fileClient.upload(src, dest, grp, token);
-                if(success) {
-					System.out.println("Upload successful!");
-                } else {
-					System.out.print("Upload unsuccessful, try again? (y/n): ");
-					if(input.nextLine().equals("n")) {
-						break;
+				//System.out.println("Please enter the group you would like to upload to: ");
+                boolean stayinGroups = groupsCheck();
+                if(stayinGroups)
+                {
+                    String grp = selectGroup();
+                    if(!grp.equals(""))
+                    {
+        				success = fileClient.upload(src, dest, grp, token);
+                        if(success) {
+        					System.out.println("Upload successful!");
+                        } else {
+        					System.out.print("Upload unsuccessful, try again? (y/n): ");
+        					if(input.nextLine().equals("n")) {
+        						break;
+                            }
+                        }
                     }
+                }
+                else
+                {
+                    break;
                 }
             } while(!success);
         }
