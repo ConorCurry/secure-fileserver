@@ -80,14 +80,15 @@ public class FileClient extends Client implements FileClientInterface {
 				//validate challenge response
 				byte[] resp = cipher.doFinal( (byte[])env.getObjContents().get(0) );
 				messageDigest.update(rand);
-				byte[] challenge_resp = Arrays.copyOfRange(resp,0,messageDigest.getDigestLength());
+				int len = messageDigest.getDigestLength();
+				byte[] challenge_resp = Arrays.copyOfRange(resp,0,len);
 				
 				if (!Arrays.equals(challenge_resp, messageDigest.digest())) {
 					System.out.println("Server authenticity could not be verified");
 					return false;
 				}
 				//retrieve AES256 session key
-				symKey = (SecretKey)new SecretKeySpec(Arrays.copyOfRange(resp,rand.length,resp.length), "AES");
+				symKey = (SecretKey)new SecretKeySpec(Arrays.copyOfRange(resp,len,resp.length), "AES");
 			} catch (Exception e) {
 				System.err.println("Error in validating challenge response / retreiving session key (RSA): " + e);
 				return false;
@@ -201,6 +202,9 @@ public class FileClient extends Client implements FileClientInterface {
 			 //Tell the server to return the member list
 			 message = new Envelope("LFILES");
 			 message.addObject(token); //Add requester's token
+			 if(symKey == null) {
+				 System.err.println("NULL SYMKEY");
+			 }
 			 output.writeObject(message.encrypted(symKey)); 
 			 
 			 try {

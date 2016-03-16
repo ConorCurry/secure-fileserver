@@ -43,6 +43,7 @@ public class Envelope implements Serializable {
 
 			return new SealedObject(this, cipher);
 		} catch (Exception e) {
+			e.printStackTrace(System.err);
 			System.err.println("ENVELOPE ENCRYPTION FAILED (Sym): " + e);
 			return null;
 		}
