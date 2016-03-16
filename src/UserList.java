@@ -1,19 +1,27 @@
 /* This list represents the users on the server */
 import java.util.*;
+import java.security.*;
 
-
-	public class UserList implements java.io.Serializable {
+public class UserList implements java.io.Serializable {
 	
 		/**
 		 * 
 		 */
 		private static final long serialVersionUID = 7600343803563417992L;
+		private static final char[] blacklist = {'&', '+'};
 		private Hashtable<String, User> list = new Hashtable<String, User>();
 		
-		public synchronized void addUser(String username)
+
+		public synchronized boolean addUser(String username, PublicKey pubKey)
 		{
-			User newUser = new User();
-			list.put(username, newUser);
+			for(char invalidChar : blacklist) {
+				if(username.indexOf(invalidChar) > 0) {
+					return false;
+				}
+			}
+		   	User newUser = new User(pubKey);
+	   		list.put(username, newUser);
+   			return true;
 		}
 		
 		public synchronized void deleteUser(String username)
@@ -44,11 +52,22 @@ import java.util.*;
 		{
 			return list.get(username).getOwnership();
 		}
+
+		public synchronized PublicKey getUserPublicKey(String username)
+		{
+			return list.get(username).getPublicKey();
+		}
 		
 		/* add a new group to a user */
-		public synchronized void addGroup(String user, String groupname)
+		public synchronized boolean addGroup(String user, String groupname)
 		{
+			for(char invalidChar : blacklist) {
+				if(groupname.indexOf(invalidChar) > 0) {
+					return false;
+				}
+			}
 			list.get(user).addGroup(groupname);
+			return true;
 		}
 		
 		/* remove a group from a user */
@@ -76,11 +95,13 @@ import java.util.*;
 		private static final long serialVersionUID = -6699986336399821598L;
 		private ArrayList<String> groups;
 		private ArrayList<String> ownership;
+		private PublicKey pubKey;
 		
-		public User()
+		public User(PublicKey key)
 		{
 			groups = new ArrayList<String>();
 			ownership = new ArrayList<String>();
+			pubKey = key;
 		}
 		
 		public ArrayList<String> getGroups()
@@ -93,6 +114,11 @@ import java.util.*;
 			return ownership;
 		}
 		
+		public PublicKey getPublicKey()
+		{
+			return pubKey;
+		}
+
 		public void addGroup(String group)
 		{
 			groups.add(group);
