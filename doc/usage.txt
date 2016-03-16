@@ -1,20 +1,17 @@
 FileSharing Usage Information
 
 USAGE:
- To start Group Server: java RunGroupServer [(optional) port number]
+ To start Group Server: java -cp .:/{Whatever path before tha}/cs1653-project-clc231-yic66/src/bcprov-jdk15on-154.jar RunGroupServer [(optional) port number]
  When the group server is first started, there are no users or groups. Since 
  there must be an administer of the system, the user is prompted via the console
- to enter a username. This name becomes the first user and is a member of the
- ADMIN group.  Also, no groups exist.  The group server will by default
+ to enter a username, and create the passwords for his/her account and group server. This name becomes the first user and is a member of the  ADMIN group.  Also, no groups exist.  The group server will by default
  run on port 8765, but a custom port can be passed as the first command line
- argument.
+ argument. If it's not the first time to start the server, it's required to put the server's password.
 
 
- To start the File Server: java RunFileServer [(optional) port number]
- The file server will create a shared_files inside the working directory if one 
- does not exist. The file server is now online.  The file server will by default
- run on port 4321, but a custom port can be passed as the first command line
- argument.
+ To start the File Server: java -cp .:/{Whatever path before tha}/cs1653-project-clc231-yic66/src/bcprov-jdk15on-154.jar RunFileServer [(optional) port number]
+ The file server will create a shared_files inside the working directory if one does not exist. The file server is now online. The password of the file server needs to be created, if it does not exist. If it's not the first time to start the server, it's required to put the server's password. The file server will by default
+ run on port 4321, but a custom port can be passed as the first command line argument.
 
  To reset the File server completely, delete FileList.bin and the shared_files 
  directory.
@@ -22,9 +19,9 @@ USAGE:
  
  Note that this implementation supports server side directories.
 
- To run the client application: java ClientApp
+ To run the client application:java -cp .:/{Whatever path before tha}/cs1653-project-clc231-yic66/src/bcprov-jdk15on-154.jar ClientApp
  This client will connect to the group server by specifying the name and also the port number consistent with the one for the group server.
- The username will be asked for log in.
+ The username will be asked for log in. If the user is in the system, the user needs to put in his/her password to start the process of authenticaion. If the user is not in the system, he/she will be asked to create a password for future use. The information of key pairs will be recorded, and that user will be forced to log out.
  The user will be shown a list of their groups and also choose the one they would like to work on.
  The main menu will appear, and a list of operations for group server will be shown.
  If the user would like to work on file server as well, the user can connect via the corresponding option.
