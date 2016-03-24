@@ -168,37 +168,65 @@ public class GroupThread extends Thread
 					output.writeObject(response_a);
 					output.flush();
 					output.reset();
-					
-					Envelope second_message = (Envelope)input.readObject();
-					byte[] to_be_verified = (byte[])second_message.getObjContents().get(0); //get the hashed number decrypted by the user 
-					
-					Envelope response_v = null;
-					if(second_message.getMessage().equals("VERIFY"))
+
+					if(response_a.getMessage().equals("FAIL"))
 					{
-							Cipher res_cipher = Cipher.getInstance("AES", "BC");
-							res_cipher.init(Cipher.ENCRYPT_MODE, AES_key);
+						try
+						{
+							socket.close();
+						}
+						catch (Exception en)
+						{
+							System.err.println("Error: " + en.getMessage());
+						}
+						proceed = false; //skip the loop
+					}	
+					else
+					{
+					
+						Envelope second_message = (Envelope)input.readObject();
+						byte[] to_be_verified = (byte[])second_message.getObjContents().get(0); //get the hashed number decrypted by the user 
+						
+						Envelope response_v = null;
+						if(second_message.getMessage().equals("VERIFY"))
+						{
+								Cipher res_cipher = Cipher.getInstance("AES", "BC");
+								res_cipher.init(Cipher.ENCRYPT_MODE, AES_key);
 
-							
-							String response_message;
-							//hash the server generated data to see whether it's the same as the one received by the user 
-							MessageDigest messageDigest = MessageDigest.getInstance("SHA-256");
-							messageDigest.update(rndBytes);
-							byte[] hashedNumber = messageDigest.digest();
+								
+								String response_message;
+								//hash the server generated data to see whether it's the same as the one received by the user 
+								MessageDigest messageDigest = MessageDigest.getInstance("SHA-256");
+								messageDigest.update(rndBytes);
+								byte[] hashedNumber = messageDigest.digest();
 
-							if(Arrays.equals(to_be_verified, hashedNumber))
-							{
-								response_message = "OK";
-							}
-							else
-							{
-								response_message = "FAIL";
-							}
-							//encrypt the response by AES_key from now on
-							response_v = new Envelope(response_message);
-							output.writeObject(response_v.encrypted(AES_key));
-							output.flush();
-							output.reset();
-					}
+								if(Arrays.equals(to_be_verified, hashedNumber))
+								{
+									response_message = "OK";
+								}
+								else
+								{
+									response_message = "FAIL";
+								}
+								//encrypt the response by AES_key from now on
+								response_v = new Envelope(response_message);
+								output.writeObject(response_v.encrypted(AES_key));
+								output.flush();
+								output.reset();
+								if(response_message.equals("FAIL"))
+								{
+									try
+									{
+										socket.close();
+									}
+									catch (Exception en)
+									{
+										System.err.println("Error: " + en.getMessage());
+									}
+									proceed = false; //skip the loop
+								}
+						}
+				}
 			}
 			else
 			{
@@ -238,6 +266,7 @@ public class GroupThread extends Thread
 						response.addObject(null);
 					} else {
 						UserToken yourToken = createToken(username); //Create a token
+						yourToken.tokSign(privKey); //sign the token for the file server authentication purpose
 						
 						//Respond to the client. On error, the client will receive a null token
 						if(yourToken != null) {
@@ -268,6 +297,7 @@ public class GroupThread extends Thread
 					else
 					{
 						UserToken yourToken = createToken(username, subset); //Create a token
+						yourToken.tokSign(privKey); //sign the token for the file server authentication purpose
 						
 						//Respond to the client. On error, the client will receive a null token
 						response = new Envelope("OK");
