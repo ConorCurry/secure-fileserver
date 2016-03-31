@@ -5,11 +5,14 @@ import java.io.*;
 import org.bouncycastle.jce.provider.*;
 import javax.crypto.*;
 import java.security.*;
+import java.nio.ByteBuffer;
 
 public class GroupClient extends Client implements GroupClientInterface {
  	 private static final String RSA_Method = "RSA/NONE/OAEPWithSHA256AndMGF1Padding";
 	 private static final String AES_Method = "AES/CBC/PKCS5Padding";
 	 private static SecretKey AES_key = null;
+	 private static SecretKey identity_key = null;
+	 private static int t = 0;
 
 	 //send the user name and challenge to the server 
 	 public boolean authenticate(String username, PrivateKey usrPrivKey)
@@ -28,7 +31,19 @@ public class GroupClient extends Client implements GroupClientInterface {
 	        KeyGenerator key = KeyGenerator.getInstance("AES", "BC");
 	        key.init(256, new SecureRandom());
 	        AES_key = key.generateKey();
+
+	        //generate a 256-bit key for identity check in HMAC 
+	        key = KeyGenerator.getInstance("HmacSHA256", "BC");
+	        key.init(256, new SecureRandom());
+	        identity_key = key.generateKey();
+
+	        //System.out.println(Base64.getEncoder().encodeToString(identity_key.getEncoded()));
 	 		
+	 		//generate a 512 byte array for AES key and indentitiy key 
+	        byte[] keys_combined = new byte[64];
+	        System.arraycopy(AES_key.getEncoded(), 0, keys_combined, 0, 32);
+	        System.arraycopy(identity_key.getEncoded(), 0, keys_combined, 32, 32);
+
 	 		Envelope message = null;
 	 		Envelope response = null;
 	 		message = new Envelope("CHALLENGE"); //Actually don't care 
@@ -43,10 +58,9 @@ public class GroupClient extends Client implements GroupClientInterface {
 	 		cipher.init(Cipher.ENCRYPT_MODE, serverPubkey);
 	 		message.addObject(cipher.doFinal(rndBytes));
 	 		
-	 		//encrypt the secret key 
-	 		byte[] key_data = AES_key.getEncoded();
+	 		//encrypt the combined keys 
 	 		cipher.init(Cipher.ENCRYPT_MODE, serverPubkey);
-			byte[] encrypted_data = cipher.doFinal(key_data);
+			byte[] encrypted_data = cipher.doFinal(keys_combined);
 			message.addObject(encrypted_data);
 	 		
 	 		//generate signature for the encrypted secret key 
@@ -103,8 +117,25 @@ public class GroupClient extends Client implements GroupClientInterface {
 								output.reset();
 								
 								Envelope second_response = (Envelope)((SealedObject)input.readObject()).getObject(AES_key);
+								
 								if((second_response.getMessage()).equals("OK"))
-									return true;
+								{
+										Mac mac = Mac.getInstance("HmacSHA256", "BC");
+										mac.init(identity_key);
+										
+										byte[] res_array = "OK".getBytes("UTF-8");
+										byte[] hmac_msg = new byte[res_array.length + 4];
+										System.arraycopy((byte[])second_message.getObjContents().get(0), 0, hmac_msg, 0, 4);
+										System.arraycopy(res_array, 0, hmac_msg, 4, res_array.length);
+										byte[] rawHamc = mac.doFinal(hmac_msg);
+			
+										byte[] Hmac_passed = (byte[])second_response.getObjContents().get(1);
+										if(Arrays.equals(rawHamc, Hmac_passed))
+										{
+											return true;
+										}
+										System.out.println("rawHamc");
+								}
 							}
 						}
 					}

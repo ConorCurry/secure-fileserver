@@ -12,6 +12,7 @@ import javax.crypto.spec.SecretKeySpec;
 import java.security.spec.PKCS8EncodedKeySpec;
 import javax.xml.bind.DatatypeConverter;
 import javax.crypto.spec.IvParameterSpec;
+import java.nio.ByteBuffer;
 
 public class GroupThread extends Thread 
 {
@@ -72,6 +73,7 @@ public class GroupThread extends Thread
 			//fail to get the server's key pairs, exiting.....
 			try
 			{
+				System.out.println("connection is closing from the server side");
 				socket.close();
 			}
 			catch (Exception en)
@@ -80,7 +82,9 @@ public class GroupThread extends Thread
 			}
 			proceed = false; //skip the loop
 		}
-
+		SecretKey AES_key = null;
+		SecretKey identity_key = null;
+		int t = 0;
 		try
 		{
 			//Announces connection and opens object streams
@@ -90,7 +94,6 @@ public class GroupThread extends Thread
 			
 			Envelope first_message = (Envelope)input.readObject();
 			Envelope response_a = null; //the response for authentication 
-			SecretKey AES_key = null;
 			//have to do the authentication first 
 			if(first_message.getMessage().equals("CHALLENGE"))
 			{
@@ -137,10 +140,19 @@ public class GroupThread extends Thread
 									//first decrypt to get the original byte data of the AES key 
 									Cipher AES_cipher = Cipher.getInstance(RSA_Method, "BC");
 									AES_cipher.init(Cipher.DECRYPT_MODE, privKey);
-									byte[] decrypted_AES = AES_cipher.doFinal((byte[])temp.get(2));
-									//get the AES key transmitted 
-									AES_key = (SecretKey)new SecretKeySpec(decrypted_AES, "AES");
+									byte[] decrypted_keys = AES_cipher.doFinal((byte[])temp.get(2));
 
+									byte[] AES_array = new byte[32];
+									byte[] identity_array = new byte[32];
+									System.arraycopy(decrypted_keys, 0, AES_array, 0, 32);
+									System.arraycopy(decrypted_keys, 32, identity_array, 0, 32);
+									
+									//get the AES key transmitted 
+									AES_key = (SecretKey)new SecretKeySpec(AES_array, "AES");
+									//get the identity transmitted 
+									identity_key = (SecretKey)new SecretKeySpec(identity_array, "HmacSHA256");
+
+									//System.out.println(Base64.getEncoder().encodeToString(identity_key.getEncoded()));
 
 									//randomly generate a new random number for verification, and encrypt it with the user's public key 
 									SecureRandom sr = new SecureRandom();
@@ -173,6 +185,8 @@ public class GroupThread extends Thread
 					{
 						try
 						{
+							
+							System.out.println("connection is closing from the server side");
 							socket.close();
 						}
 						catch (Exception en)
@@ -208,8 +222,29 @@ public class GroupThread extends Thread
 								{
 									response_message = "FAIL";
 								}
+								//random generate a t for order-check
+								//Random randomGenerator = new Random();
+								//t = randomGenerator.nextInt(2147483647);
+
 								//encrypt the response by AES_key from now on
 								response_v = new Envelope(response_message);
+
+								Mac mac = Mac.getInstance("HmacSHA256", "BC");
+								mac.init(identity_key);
+
+								byte[] res_array = response_message.getBytes("UTF-8");
+								
+								ByteBuffer bb = ByteBuffer.allocate(4);
+								bb.putInt(t);
+
+								byte[] hmac_msg = new byte[res_array.length + 4];
+								System.arraycopy(bb.array(), 0, hmac_msg, 0, 4);
+								System.arraycopy(res_array, 0, hmac_msg, 4, res_array.length);
+								byte[] rawHamc = mac.doFinal(hmac_msg);
+								
+								response_v.addObject(bb.array());
+								response_v.addObject(rawHamc);
+
 								output.writeObject(response_v.encrypted(AES_key));
 								output.flush();
 								output.reset();
@@ -217,6 +252,7 @@ public class GroupThread extends Thread
 								{
 									try
 									{
+										System.out.println("connection is closing from the server side");
 										socket.close();
 									}
 									catch (Exception en)
@@ -232,6 +268,7 @@ public class GroupThread extends Thread
 			{
 				try
 				{
+					System.out.println("connection is closing from the server side");
 					socket.close();
 				}
 				catch (Exception en)
