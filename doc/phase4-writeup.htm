@@ -77,6 +77,7 @@ your group has decided to use to address threats T5–T7.</p>
     <section id="threat7">
       <h2>Threat T7: Token Theft</h2>
 <!-- BEGIN CHANGES HERE -->
+<p> Since fileservers cannot be trusted to keep tokens private, mechanisms must be implemented to limit the transferability of any individual token. This means that the groupserver will be more involved in granting tokens with limited access scopes, but will do so without retaining any information about the fileservers. In the previous phase, if a token were leaked, it would allow the holder of such a token a complete identity for an inauthentic user. In this sense, the Phase 3 implementation was completely transferable and irrevokable. The only scope limiting was due to the mechanism involved in providing least privilege, meaning that the group server would grant tokens applicable only to a subset of a users groups. In this phase, we are extending this idea of least privilege on a token level. This means that a particular token will grant access only to a particular fileserver, and only for a relatively short time interval. This will reduce the value of stealing any individual token, while the user retains all access permissions they had in the previous phase. </p>
 
 <p>The mechanism for preventin token theft involves a few additions to the token structure, and the protocol for requesting a token from the group server. The token will have an added expiration date to limit the transferrability of a stolen token, as well as a field that specifies the destination fileserver where it is valid. </p>
 
