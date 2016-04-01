@@ -223,7 +223,7 @@ public class GroupThread extends Thread
 								}
 								//random generate a t for order-check
 								Random randomGenerator = new Random();
-								t = randomGenerator.nextInt(2147483647/2s);
+								t = randomGenerator.nextInt(2147483647/2);
 
 								//encrypt the response by AES_key from now on
 								response_v = new Envelope(response_message);
@@ -231,20 +231,21 @@ public class GroupThread extends Thread
 								Mac mac = Mac.getInstance("HmacSHA256", "BC");
 								mac.init(identity_key);
 
-								byte[] res_array = response_message.getBytes("UTF-8");
-								ByteBuffer bb = ByteBuffer.allocate(4);
-								bb.putInt(t);
-								//response_v.addObject(bb.array()); //add first object into array 
-								response_v.addObject((Integer)t);
-
-								byte[] hmac_msg = new byte[res_array.length + 4];
-								System.arraycopy(bb.array(), 0, hmac_msg, 0, 4);
-								System.arraycopy(res_array, 0, hmac_msg, 4, res_array.length);
-								byte[] rawHamc = mac.doFinal(hmac_msg);
-							
+								Envelope to_be_sent = new Envelope(response_message);
+								to_be_sent.addObject((Integer)t);
+								t++;//increase t to keep order 
+								
+								Cipher object_cipher = Cipher.getInstance("AES/CBC/PKCS5Padding", "BC");
+								object_cipher.init(Cipher.ENCRYPT_MODE, AES_key);
+								
+								SealedObject hmac_msg_sealed = new SealedObject(to_be_sent, object_cipher);
+								response_v.addObject(hmac_msg_sealed);
+								
+								System.out.println(t);
+								byte[] rawHamc = mac.doFinal(convertToBytes(hmac_msg_sealed));
 								response_v.addObject(rawHamc); //add first object into array 
 						
-								output.writeObject(response_v.encrypted(AES_key)); //sent sealed object 
+								output.writeObject(response_v);
 								output.flush();
 								output.reset();
 								if(response_message.equals("FAIL"))
@@ -279,20 +280,34 @@ public class GroupThread extends Thread
 
 			while(proceed)
 			{
-				Envelope message;
-				Object read_object = input.readObject();
-				if(read_object.getClass().getName().equals("Envelope"))
+				Envelope message = (Envelope) input.readObject();
+				byte[] msg_combined_encrypted = convertToBytes((SealedObject)message.getObjContents().get(0));
+				Mac mac = Mac.getInstance("HmacSHA256", "BC");
+				mac.init(identity_key);
+				byte[] rawHamc = mac.doFinal(msg_combined_encrypted);
+				byte[] Hmac_passed = (byte[])second_response.getObjContents().get(1);
+				String instruction = "";
+				if(Arrays.equals(rawHamc, Hmac_passed))
 				{
-					message = (Envelope)read_object;
-				}
-				else
-				{
-				 	message = (Envelope)(((SealedObject)read_object).getObject(AES_key));
+						Envelope plaintext = (Envelope)((SealedObject)message.getObjContents().get(0)).getObject(AES_key);
+						int t_received = (Integer)plaintext.getObjContents().get(0);
+						if(t_received == t)
+						{
+							instruction = plaintext.getMessage();
+							t++;
+						}
+						else
+						{
+							proceed = false;
+							socket.close(); 
+							System.out.println("The message is replayed/reordered!");
+							break;
+						}
 				}
 				System.out.println("Request received: " + message.getMessage());
 				Envelope response = null;
 				
-				if(message.getMessage().equals("GET"))//Client wants a token
+				if(instruction.equals("GET"))//Client wants a token
 				{
 					String username = new String((String)message.getObjContents().get(0)); //Get the username
 					if(username == null)
@@ -311,12 +326,28 @@ public class GroupThread extends Thread
 							response = new Envelope("FAIL");
 						}
 					   	response.addObject(yourToken);
+					    response.addObject((Integer)t);	
 					}
-			   		output.writeObject(response.encrypted(AES_key));
+
+					mac = Mac.getInstance("HmacSHA256", "BC");
+					mac.init(identity_key);
+
+					Envelope to_be_sent = new Envelope("RSP");
+								
+					Cipher object_cipher = Cipher.getInstance("AES/CBC/PKCS5Padding", "BC");
+					object_cipher.init(Cipher.ENCRYPT_MODE, AES_key);
+								
+					SealedObject hmac_msg_sealed = new SealedObject(response, object_cipher);
+					to_be_sent.addObject(hmac_msg_sealed);
+								
+					rawHamc = mac.doFinal(convertToBytes(hmac_msg_sealed));
+					to_be_sent.addObject(rawHamc); //add first object into array 
+						
+			   		output.writeObject(to_be_sent);
 				   	output.flush();
 					output.reset();
 				}
-				if(message.getMessage().equals("GET_SUBSET"))//Client wants a token
+				if(instruction.equals("GET_SUBSET"))//Client wants a token
 				{
 					String username = (String)message.getObjContents().get(0); //Get the username
 					ArrayList<String> subset = null;
@@ -343,7 +374,7 @@ public class GroupThread extends Thread
 					output.flush();
 					output.reset();
 				}
-				else if(message.getMessage().equals("CUSER")) //Client wants to create a user
+				else if(instruction.equals("CUSER")) //Client wants to create a user
 				{
 					if(message.getObjContents().size() < 3)
 					{
@@ -374,7 +405,7 @@ public class GroupThread extends Thread
 					output.flush();
 					output.reset();
 				}
-				else if(message.getMessage().equals("DUSER")) //Client wants to delete a user
+				else if(instruction.equals("DUSER")) //Client wants to delete a user
 				{
 					
 					if(message.getObjContents().size() < 2)
@@ -404,7 +435,7 @@ public class GroupThread extends Thread
 					output.flush();
 					output.reset();
 				}
-				else if(message.getMessage().equals("CGROUP")) //Client wants to create a group
+				else if(instruction.equals("CGROUP")) //Client wants to create a group
 				{
 				    if(message.getObjContents().size() < 2)
 					{
@@ -433,7 +464,7 @@ public class GroupThread extends Thread
 					output.flush();
 					output.reset();
 				}
-				else if(message.getMessage().equals("DGROUP")) //Client wants to delete a group
+				else if(instruction.equals("DGROUP")) //Client wants to delete a group
 				{
 				    if(message.getObjContents().size() < 2)
 					{
@@ -462,7 +493,7 @@ public class GroupThread extends Thread
 					output.flush();
 					output.reset();
 				}
-				else if(message.getMessage().equals("LMEMBERS")) //Client wants a list of members in a group
+				else if(instruction.equals("LMEMBERS")) //Client wants a list of members in a group
 				{
 					response = new Envelope("FAIL");
 					response.addObject(null);
@@ -491,7 +522,7 @@ public class GroupThread extends Thread
 					output.flush();
 					output.reset();
 				}
-				else if(message.getMessage().equals("AUSERTOGROUP")) //Client wants to add user to a group
+				else if(instruction.equals("AUSERTOGROUP")) //Client wants to add user to a group
 				{
 				    if(message.getObjContents().size() < 3) //three objects in this method 
 					{
@@ -523,7 +554,7 @@ public class GroupThread extends Thread
 					output.flush();
 					output.reset();
 				}
-				else if(message.getMessage().equals("RUSERFROMGROUP")) //Client wants to remove user from a group
+				else if(instruction.equals("RUSERFROMGROUP")) //Client wants to remove user from a group
 				{
 				    if(message.getObjContents().size() < 3) //three objects in this method 
 					{
@@ -555,7 +586,7 @@ public class GroupThread extends Thread
 					output.flush();
 					output.reset();
 				}
-				else if(message.getMessage().equals("DISCONNECT")) //Client wants to disconnect
+				else if(instruction.equals("DISCONNECT")) //Client wants to disconnect
 				{
 					socket.close(); //Close the socket
 					proceed = false; //End this communication loop
@@ -890,5 +921,21 @@ public class GroupThread extends Thread
 		{
 			return false; //user does not exist 
 		}
+	}
+
+	private byte[] convertToBytes(SealedObject object){
+ 		try{ 
+    	   	ByteArrayOutputStream bos = new ByteArrayOutputStream();
+         	ObjectOutput out = new ObjectOutputStream(bos);
+        	out.writeObject(object);
+        	bos.close();
+        	out.close();
+        	return bos.toByteArray();
+    	} 
+    	catch (Exception byte_exception)
+    	{
+    		System.out.println("Can't convert object to a byte array");
+    		return null;
+    	}
 	}
 }

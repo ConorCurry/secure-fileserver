@@ -6,6 +6,7 @@ import org.bouncycastle.jce.provider.*;
 import javax.crypto.*;
 import java.security.*;
 import java.nio.ByteBuffer;
+import java.math.BigInteger;
 
 public class GroupClient extends Client implements GroupClientInterface {
  	 private static final String RSA_Method = "RSA/NONE/OAEPWithSHA256AndMGF1Padding";
@@ -114,25 +115,19 @@ public class GroupClient extends Client implements GroupClientInterface {
 								output.flush();
 								output.reset();
 								
-								Envelope second_response = (Envelope)((SealedObject)input.readObject()).getObject(AES_key);
-								t = (Integer)second_response.getObjContents().get(0);
-								if((second_response.getMessage()).equals("OK"))
+								Envelope second_response = (Envelope)input.readObject();
+								byte[] msg_combined_encrypted = convertToBytes((SealedObject)second_response.getObjContents().get(0));
+								Mac mac = Mac.getInstance("HmacSHA256", "BC");
+								mac.init(identity_key);
+								byte[] rawHamc = mac.doFinal(msg_combined_encrypted);
+								byte[] Hmac_passed = (byte[])second_response.getObjContents().get(1);
+								if(Arrays.equals(rawHamc, Hmac_passed))
 								{
-										Mac mac = Mac.getInstance("HmacSHA256", "BC");
-										mac.init(identity_key);
-										ByteBuffer bb = ByteBuffer.allocate(4);
-										bb.putInt(t);
-										byte[] res_array = "OK".getBytes("UTF-8");
-										byte[] hmac_msg = new byte[res_array.length + 4];
-										System.arraycopy(bb.array(), 0, hmac_msg, 0, 4);
-										System.arraycopy(res_array, 0, hmac_msg, 4, res_array.length);
-										byte[] rawHamc = mac.doFinal(hmac_msg);
-										byte[] Hmac_passed = (byte[])second_response.getObjContents().get(1);
-										if(Arrays.equals(rawHamc, Hmac_passed))
-										{
-											return true;
-										}
-										System.out.println("rawHamc");
+									Envelope plaintext = (Envelope)((SealedObject)second_response.getObjContents().get(0)).getObject(AES_key);
+									t = (Integer)plaintext.getObjContents().get(0);
+									System.out.println(t);
+									if((plaintext.getMessage()).equals("OK"))
+										return true;
 								}
 							}
 						}
@@ -442,4 +437,19 @@ public class GroupClient extends Client implements GroupClientInterface {
 			}
 	 }
 
+	 private byte[] convertToBytes(Object object){
+ 		try{ 
+    	   	ByteArrayOutputStream bos = new ByteArrayOutputStream();
+         	ObjectOutput out = new ObjectOutputStream(bos);
+        	out.writeObject(object);
+        	bos.close();
+        	out.close();
+        	return bos.toByteArray();
+    	} 
+    	catch (Exception byte_exception)
+    	{
+    		System.out.println("Can't convert object to a byte array");
+    		return null;
+    	}
+	}
 }
