@@ -11,7 +11,7 @@ public class GroupClient extends Client implements GroupClientInterface {
  	 private static final String RSA_Method = "RSA/NONE/OAEPWithSHA256AndMGF1Padding";
 	 private static final String AES_Method = "AES/CBC/PKCS5Padding";
 	 private static SecretKey AES_key = null;
-	 private static SecretKey identity_key = null;
+	 private static Key identity_key = null;
 	 private static int t = 0;
 
 	 //send the user name and challenge to the server 
@@ -36,8 +36,6 @@ public class GroupClient extends Client implements GroupClientInterface {
 	        key = KeyGenerator.getInstance("HmacSHA256", "BC");
 	        key.init(256, new SecureRandom());
 	        identity_key = key.generateKey();
-
-	        //System.out.println(Base64.getEncoder().encodeToString(identity_key.getEncoded()));
 	 		
 	 		//generate a 512 byte array for AES key and indentitiy key 
 	        byte[] keys_combined = new byte[64];
@@ -117,18 +115,18 @@ public class GroupClient extends Client implements GroupClientInterface {
 								output.reset();
 								
 								Envelope second_response = (Envelope)((SealedObject)input.readObject()).getObject(AES_key);
-								
+								t = (Integer)second_response.getObjContents().get(0);
 								if((second_response.getMessage()).equals("OK"))
 								{
 										Mac mac = Mac.getInstance("HmacSHA256", "BC");
 										mac.init(identity_key);
-										
+										ByteBuffer bb = ByteBuffer.allocate(4);
+										bb.putInt(t);
 										byte[] res_array = "OK".getBytes("UTF-8");
 										byte[] hmac_msg = new byte[res_array.length + 4];
-										System.arraycopy((byte[])second_message.getObjContents().get(0), 0, hmac_msg, 0, 4);
+										System.arraycopy(bb.array(), 0, hmac_msg, 0, 4);
 										System.arraycopy(res_array, 0, hmac_msg, 4, res_array.length);
 										byte[] rawHamc = mac.doFinal(hmac_msg);
-			
 										byte[] Hmac_passed = (byte[])second_response.getObjContents().get(1);
 										if(Arrays.equals(rawHamc, Hmac_passed))
 										{
@@ -160,6 +158,12 @@ public class GroupClient extends Client implements GroupClientInterface {
 			//Tell the server to return a token.
 			message = new Envelope("GET");
 			message.addObject(username); //Add user name string
+			ByteBuffer bb = ByteBuffer.allocate(4);
+			bb.putInt(t+1);
+			message.addObject(bb.array());
+			
+
+
 			//output.reset();
 			output.writeObject(message.encrypted(AES_key));
 			output.flush();

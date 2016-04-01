@@ -14,6 +14,7 @@ import javax.xml.bind.DatatypeConverter;
 import javax.crypto.spec.IvParameterSpec;
 import java.nio.ByteBuffer;
 
+
 public class GroupThread extends Thread 
 {
 	private final Socket socket;
@@ -83,7 +84,7 @@ public class GroupThread extends Thread
 			proceed = false; //skip the loop
 		}
 		SecretKey AES_key = null;
-		SecretKey identity_key = null;
+		Key identity_key = null;
 		int t = 0;
 		try
 		{
@@ -150,9 +151,7 @@ public class GroupThread extends Thread
 									//get the AES key transmitted 
 									AES_key = (SecretKey)new SecretKeySpec(AES_array, "AES");
 									//get the identity transmitted 
-									identity_key = (SecretKey)new SecretKeySpec(identity_array, "HmacSHA256");
-
-									//System.out.println(Base64.getEncoder().encodeToString(identity_key.getEncoded()));
+									identity_key = (Key)new SecretKeySpec(identity_array, "HmacSHA256");
 
 									//randomly generate a new random number for verification, and encrypt it with the user's public key 
 									SecureRandom sr = new SecureRandom();
@@ -223,8 +222,8 @@ public class GroupThread extends Thread
 									response_message = "FAIL";
 								}
 								//random generate a t for order-check
-								//Random randomGenerator = new Random();
-								//t = randomGenerator.nextInt(2147483647);
+								Random randomGenerator = new Random();
+								t = randomGenerator.nextInt(2147483647/2s);
 
 								//encrypt the response by AES_key from now on
 								response_v = new Envelope(response_message);
@@ -233,19 +232,19 @@ public class GroupThread extends Thread
 								mac.init(identity_key);
 
 								byte[] res_array = response_message.getBytes("UTF-8");
-								
 								ByteBuffer bb = ByteBuffer.allocate(4);
 								bb.putInt(t);
+								//response_v.addObject(bb.array()); //add first object into array 
+								response_v.addObject((Integer)t);
 
 								byte[] hmac_msg = new byte[res_array.length + 4];
 								System.arraycopy(bb.array(), 0, hmac_msg, 0, 4);
 								System.arraycopy(res_array, 0, hmac_msg, 4, res_array.length);
 								byte[] rawHamc = mac.doFinal(hmac_msg);
-								
-								response_v.addObject(bb.array());
-								response_v.addObject(rawHamc);
-
-								output.writeObject(response_v.encrypted(AES_key));
+							
+								response_v.addObject(rawHamc); //add first object into array 
+						
+								output.writeObject(response_v.encrypted(AES_key)); //sent sealed object 
 								output.flush();
 								output.reset();
 								if(response_message.equals("FAIL"))
