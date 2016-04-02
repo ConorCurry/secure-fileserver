@@ -732,6 +732,132 @@ public class GroupThread extends Thread
 					output.flush();
 					output.reset();
 				}
+				else if(instruction.equals("FILEOPERATION"))//client wants to get a token to encrypt/decrypt files 
+				{
+					String username = (String)plaintext.getObjContents().get(1); //Get the username
+					ArrayList<String> subset = null;
+
+					//@SuppressWarnings("unchecked")
+					if(plaintext.getObjContents().get(2) != null) {
+						//subset should only have one element in it 
+					    subset = new ArrayList<String>((ArrayList<String>)plaintext.getObjContents().get(2));
+				    }
+					if(username == null || subset == null || subset.size() != 1)
+					{
+						response = new Envelope("FAIL");
+						response.addObject((Integer)t);	
+					    t++;
+						response.addObject(null);
+					}
+					else
+					{
+						ArrayList<SecretKey> file_keys = null;
+						if(my_gs.groupList.checkGroup(subset.get(0)))
+						{
+							if(my_gs.groupList.getFileKeys(subset.get(0)) != null)
+							{
+								file_keys = new ArrayList<SecretKey>(my_gs.groupList.getFileKeys(subset.get(0)));
+								UserToken yourToken = createToken(username, subset, file_keys); //Create a token
+								yourToken.tokSign(privKey); //sign the token for the file server authentication purpose
+								
+								//Respond to the client. On error, the client will receive a null token
+								response = new Envelope("OK");
+								response.addObject((Integer)t);	
+							    t++;
+								response.addObject(yourToken);
+							}
+							else
+							{
+								response = new Envelope("FAIL");
+								response.addObject((Integer)t);	
+							    t++;
+								response.addObject(null);
+							}
+						}
+						else
+						{
+							response = new Envelope("FAIL");
+							response.addObject((Integer)t);	
+						    t++;
+							response.addObject(null);
+						}
+					}
+					mac = Mac.getInstance("HmacSHA256", "BC");
+					mac.init(identity_key);
+
+					Envelope to_be_sent = new Envelope("RSP");
+								
+					Cipher object_cipher = Cipher.getInstance("AES/CBC/PKCS5Padding", "BC");
+					object_cipher.init(Cipher.ENCRYPT_MODE, AES_key);
+								
+					SealedObject hmac_msg_sealed = new SealedObject(response, object_cipher);
+					to_be_sent.addObject(hmac_msg_sealed);
+								
+					byte[] rawHamc_2 = mac.doFinal(convertToBytes(hmac_msg_sealed));
+					to_be_sent.addObject(rawHamc_2);
+						
+			   		output.writeObject(to_be_sent);
+					output.flush();
+					output.reset();
+				}
+				else if(instruction.equals("CONNECT_FILE_SERVER"))
+				{
+					String username = (String)plaintext.getObjContents().get(1); //Get the username
+					ArrayList<String> subset = null;
+
+					//@SuppressWarnings("unchecked")
+					if(plaintext.getObjContents().get(2) != null) {
+						//subset should only have one element in it 
+					    subset = new ArrayList<String>((ArrayList<String>)plaintext.getObjContents().get(2));
+				    }
+					if(username == null || subset == null || subset.size() != 1)
+					{
+						response = new Envelope("FAIL");
+						response.addObject((Integer)t);	
+					    t++;
+						response.addObject(null);
+					}
+					else
+					{
+						if(plaintext.getObjContents().get(3) != null)
+						{
+							PublicKey filePubKey = (PublicKey)plaintext.getObjContents().get(3);
+							UserToken yourToken = createToken(username, subset, filePubKey); //Create a token
+							yourToken.tokSign(privKey); //sign the token for the file server authentication purpose
+								
+							//Respond to the client. On error, the client will receive a null token
+							response = new Envelope("OK");
+							response.addObject((Integer)t);	
+							t++;
+							response.addObject(yourToken);
+						}
+						else
+						{
+							response = new Envelope("FAIL");
+							response.addObject((Integer)t);	
+							t++;
+							response.addObject(null);
+							
+						}
+					}
+					mac = Mac.getInstance("HmacSHA256", "BC");
+					mac.init(identity_key);
+
+					Envelope to_be_sent = new Envelope("RSP");
+								
+					Cipher object_cipher = Cipher.getInstance("AES/CBC/PKCS5Padding", "BC");
+					object_cipher.init(Cipher.ENCRYPT_MODE, AES_key);
+								
+					SealedObject hmac_msg_sealed = new SealedObject(response, object_cipher);
+					to_be_sent.addObject(hmac_msg_sealed);
+								
+					byte[] rawHamc_2 = mac.doFinal(convertToBytes(hmac_msg_sealed));
+					to_be_sent.addObject(rawHamc_2);
+						
+			   		output.writeObject(to_be_sent);
+					output.flush();
+					output.reset();
+				}
 				else if(instruction.equals("DISCONNECT")) //Client wants to disconnect
 				{
 					socket.close(); //Close the socket
@@ -786,6 +912,47 @@ public class GroupThread extends Thread
 			return null;
 		}
 	}
+
+	private UserToken createToken(String username, ArrayList<String> subset, ArrayList<SecretKey> keyList)
+	{
+		//Check that user exists
+		if(my_gs.userList.checkUser(username))
+		{
+			//Issue a new token with server's name, user's name, and user's groups
+			for(String group : subset) {
+			    if(!my_gs.userList.getUserGroups(username).contains(group)) {
+			        subset.remove(subset.indexOf(group));
+			    }
+			}
+			UserToken yourToken = new Token(my_gs.name, username, subset, keyList);
+			return yourToken;
+		}
+		else
+		{
+			return null;
+		}
+	}
+
+	private UserToken createToken(String username, ArrayList<String> subset, PublicKey key)
+	{
+		//Check that user exists
+		if(my_gs.userList.checkUser(username))
+		{
+			//Issue a new token with server's name, user's name, and user's groups
+			for(String group : subset) {
+			    if(!my_gs.userList.getUserGroups(username).contains(group)) {
+			        subset.remove(subset.indexOf(group));
+			    }
+			}
+			UserToken yourToken = new Token(my_gs.name, username, subset, key);
+			return yourToken;
+		}
+		else
+		{
+			return null;
+		}
+	}
+
 	//Method to create a user
 	private boolean createUser(String username, UserToken yourToken, PublicKey to_be_added)
 	{

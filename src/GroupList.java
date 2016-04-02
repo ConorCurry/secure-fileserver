@@ -72,7 +72,7 @@ import org.bouncycastle.jce.provider.*;
 			return list.get(groupname).getOwners();
 		}
 		
-		public synchronized List<SecretKey> getFileKeys(String groupname)
+		public synchronized ArrayList<SecretKey> getFileKeys(String groupname)
 		{
 			return list.get(groupname).getFileKeys();
 		}
@@ -110,7 +110,7 @@ import org.bouncycastle.jce.provider.*;
 		private static final long serialVersionUID = 6610772112L;
 		private ArrayList<String> owners;
 		private List<String> members;
-		private List<SecretKey> file_keys; //created for file encryption/decryption
+		private ArrayList<SecretKey> file_keys; //created for file encryption/decryption
 		
 		public Group()
 		{
@@ -150,7 +150,7 @@ import org.bouncycastle.jce.provider.*;
 	        }
 		}
 		
-		public List<SecretKey> getFileKeys()
+		public ArrayList<SecretKey> getFileKeys()
 		{
 			return file_keys;
 		}
