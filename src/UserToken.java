@@ -1,6 +1,7 @@
 
 import java.util.List;
 import java.security.*;
+import javax.crypto.*;
 
 /**
  * A simple interface to the token data structure that will be
@@ -48,6 +49,21 @@ public interface UserToken
      *
      */
     public List<String> getGroups();
+
+    /* This method returns the time when the token is created
+       This method will be used when the user needs to upload/download file
+    */
+    public long getCreatedTime();
+
+    /* This method returns the key List embedded in the token 
+       This method will be used when the user needs to upload/download file
+    */
+    public List<SecretKey> getKeys();
+
+    /* This method returns the encrypted time when the token is created
+       This method will be used when the user needs to communicate with the file server
+    */
+    public byte[] getEncryptedTime();
 
 	/** This method initializes the signature on a token.
 	 *
