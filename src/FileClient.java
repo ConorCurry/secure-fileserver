@@ -46,10 +46,14 @@ public class FileClient extends Client implements FileClientInterface {
 
 		//STAGE1 -- Initialize connecction, prepare challenge
 		Envelope auth = new Envelope("AUTH");
+		//concat nonce and user public key
+		ByteArrayOutputStream concat = new ByteArrayOutputStream();
+		concat.write(rand);
+		concat.write(usrPubKey.getEncoded());
 		try {
 			cipher = Cipher.getInstance(RSA_METHOD, "BC");
 			cipher.init(Cipher.ENCRYPT_MODE, serverKey);
-			challenge = cipher.doFinal(rand);	
+			challenge = cipher.doFinal(concat.toByteArray());	
 		} catch (Exception ex) {
 			System.err.println("Encrypting Challenge Failed (RSA): " + ex);
 			return false;
@@ -57,7 +61,7 @@ public class FileClient extends Client implements FileClientInterface {
 
 		try {
 			auth.addObject(challenge);
-			auth.addObject(usrPubKey);	    		
+			//auth.addObject(usrPubKey);	    		
 			output.writeObject(auth);
 		} catch (Exception ex) {
 			System.err.println("Error sending authentication request: " + ex);
@@ -75,10 +79,10 @@ public class FileClient extends Client implements FileClientInterface {
 		if(env != null && env.getMessage().equals("AUTH") && env.getObjContents().size() == 1) {
 			try {
 				MessageDigest messageDigest = MessageDigest.getInstance("SHA-256");
-				//prepare validation cipher
+				//byte array decryption cipher
 				cipher.init(Cipher.DECRYPT_MODE, usrPrivKey);
-				//validate challenge response
 				byte[] resp = cipher.doFinal( (byte[])env.getObjContents().get(0) );
+				//parse response bytes
 				messageDigest.update(rand);
 				int len = messageDigest.getDigestLength();
 				byte[] challenge_resp = Arrays.copyOfRange(resp,0,len);
@@ -88,7 +92,9 @@ public class FileClient extends Client implements FileClientInterface {
 					return false;
 				}
 				//retrieve AES256 session key
-				symKey = (SecretKey)new SecretKeySpec(Arrays.copyOfRange(resp,len,resp.length), "AES");
+				symKey = (SecretKey)new SecretKeySpec(Arrays.copyOfRange(resp,len,len+32), "AES");
+				idenKey = (SecretKey)new SecretKeySpec(Array.copyOfRange(resp,len+32,len+64, "HmacSHA256"));
+				nonceTime = new BigInteger(resp,len+64,resp.length);
 			} catch (Exception e) {
 				System.err.println("Error in validating challenge response / retreiving session key (RSA): " + e);
 				return false;

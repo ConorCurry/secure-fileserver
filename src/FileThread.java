@@ -16,6 +16,7 @@ import javax.crypto.*;
 import java.security.*;
 import java.security.spec.PKCS8EncodedKeySpec;
 import javax.crypto.spec.SecretKeySpec;
+import java.math.BigInteger;
 
 public class FileThread extends Thread
 {
@@ -333,11 +334,14 @@ public class FileThread extends Thread
 	
 	private SecretKey authenticate() {
 		SecretKey AESKey = null;
+		SecretKey identityKey = null;
+		BigInteger nonceTime = null;
 		Cipher cipher = null;
 		PrivateKey serverKey = null;
 		PublicKey userKey = null;
 		Envelope challenge = null;
 		byte[] rand;
+		byte[] concat;
 		KeyGenerator keyGen = null;
 		try {
 			challenge = (Envelope)input.readObject();
@@ -388,31 +392,50 @@ public class FileThread extends Thread
 		try {
 			cipher = Cipher.getInstance(RSA_METHOD, "BC");
 			cipher.init(Cipher.DECRYPT_MODE, serverKey);
-			rand = cipher.doFinal( (byte[])challenge.getObjContents().get(0) );
-			userKey = (PublicKey)challenge.getObjContents().get(1);
+			concat = cipher.doFinal( (byte[])challenge.getObjContents().get(0) );
+			int randLen = 8;
+			rand = Arrays.copyOfRange(concat, 0, randLen);
+		    //userKey = (PublicKey)Arrays.copyOfRange(concat, randLen, concat.length);
+			KeyFactory kf = KeyFactory.getInstance("RSA", "BC");
+			userKey = kf.generatePublic(new X509EncodedKeySpec(Arrays.copyOfRange(concat, randLen, concat.length)));
 		} catch (Exception ex) {
 			System.err.println("Err in handling auth request part 1: " + ex);
 			return null;
 		}
+
+		//Stage2 -- Construct AuthResponse
 		try {
-			//generate AES256 key
+			//generate AES256 key as session key
 			keyGen = KeyGenerator.getInstance("AES", "BC");
 			keyGen.init(256, new SecureRandom());
 			AESKey = keyGen.generateKey();
+			//generate HMAC identity key
+			keyGen = KeyGenerator.getInstance("HmacSHA256", "BC");
+			keyGen.init(256, new SecureRandom());
+			identityKey = key.generateKey();
+			//generate nonce for sequential message verification
+			nonceTime = new BigInteger((new SecureRandom()).nextBytes(8));
 		} catch (Exception ex) {
 			System.err.println("Error in handling auth request (RSA): " + ex);
 			return null;
 		}
 
-		//Stage2 -- Auth response
+		//Stage2.5 -- Auth response
 		Envelope response = new Envelope("AUTH");
 		try {
 			MessageDigest messageDigest = MessageDigest.getInstance("SHA-256");
 			messageDigest.update(rand);
 			cipher.init(Cipher.ENCRYPT_MODE, userKey);
 			ByteArrayOutputStream msg = new ByteArrayOutputStream();
+			//Add hash of challenge to response
 			msg.write(messageDigest.digest());
+			//Add chosen session key to response
 			msg.write(AESKey.getEncoded());
+			//Add HMAC identity key to response
+			msg.write(identityKey.getEncoded());
+			//Add nonce timestamp to response
+			msg.write(nonceTime.toByteArray());
+			//encrypt and send envelope
 			response.addObject(cipher.doFinal(msg.toByteArray()));
 			output.writeObject(response);
 		} catch (Exception ex) {
@@ -421,5 +444,25 @@ public class FileThread extends Thread
 		}
 		System.out.println("Authentication complete, success!");
 		return AESKey; //auth steps complete		
+	}
+
+	//use Arrays.equals(hmac1, hmac2) to verify an hmac
+	public byte[] getHmac(SealedObject so, SecretKey identiKey) {
+		ByteArrayOutputStream bos = new ByteArrayOutputStream();
+		ObjectOutput out = new ObjectOutputStream(bos);
+		byte[] hmac = null;
+		try {
+			Mac hmacGen = Mac.getInstance("HmacSHA256", "BC");
+			mac.init(identiKey);
+			out.writeObject(so);
+			byte[] hmacAble = out.toByteArray;
+		    hmac = hmacGen.doFinal(hmacAble); 
+		} catch {
+			System.err.println("Error generating HMAC" + e);
+		} finally {
+			bos.close();
+			out.close();
+		}
+		return hmac;
 	}
 }
