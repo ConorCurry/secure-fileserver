@@ -241,7 +241,6 @@ public class GroupThread extends Thread
 								SealedObject hmac_msg_sealed = new SealedObject(to_be_sent, object_cipher);
 								response_v.addObject(hmac_msg_sealed);
 								
-								System.out.println(t);
 								byte[] rawHamc = mac.doFinal(convertToBytes(hmac_msg_sealed));
 								response_v.addObject(rawHamc); //add first object into array 
 						
@@ -280,16 +279,17 @@ public class GroupThread extends Thread
 
 			while(proceed)
 			{
-				Envelope message = (Envelope) input.readObject();
-				byte[] msg_combined_encrypted = convertToBytes((SealedObject)message.getObjContents().get(0));
+				Envelope message = (Envelope)input.readObject();
+				byte[] msg_combined_encrypted = convertToBytes((SealedObject)(message.getObjContents().get(0)));
 				Mac mac = Mac.getInstance("HmacSHA256", "BC");
 				mac.init(identity_key);
 				byte[] rawHamc = mac.doFinal(msg_combined_encrypted);
-				byte[] Hmac_passed = (byte[])second_response.getObjContents().get(1);
+				byte[] Hmac_passed = (byte[])message.getObjContents().get(1);
 				String instruction = "";
+				Envelope plaintext = null;
 				if(Arrays.equals(rawHamc, Hmac_passed))
 				{
-						Envelope plaintext = (Envelope)((SealedObject)message.getObjContents().get(0)).getObject(AES_key);
+						plaintext = (Envelope)((SealedObject)message.getObjContents().get(0)).getObject(AES_key);
 						int t_received = (Integer)plaintext.getObjContents().get(0);
 						if(t_received == t)
 						{
@@ -299,21 +299,22 @@ public class GroupThread extends Thread
 						else
 						{
 							proceed = false;
-							socket.close(); 
+							socket.close();  //close the connection
 							System.out.println("The message is replayed/reordered!");
 							break;
 						}
 				}
-				System.out.println("Request received: " + message.getMessage());
+				System.out.println("Request received: " + instruction);
 				Envelope response = null;
 				
 				if(instruction.equals("GET"))//Client wants a token
 				{
-					String username = new String((String)message.getObjContents().get(0)); //Get the username
+					String username = new String((String)plaintext.getObjContents().get(1)); //Get the username
 					if(username == null)
 					{
 						response = new Envelope("FAIL");
-						
+						response.addObject((Integer)t);	
+						t++;
 						response.addObject(null);
 					} else {
 						UserToken yourToken = createToken(username); //Create a token
@@ -325,8 +326,9 @@ public class GroupThread extends Thread
 						} else {
 							response = new Envelope("FAIL");
 						}
-					   	response.addObject(yourToken);
-					    response.addObject((Integer)t);	
+						response.addObject((Integer)t);	
+					    t++;
+					   	response.addObject(yourToken);    
 					}
 
 					mac = Mac.getInstance("HmacSHA256", "BC");
@@ -340,8 +342,8 @@ public class GroupThread extends Thread
 					SealedObject hmac_msg_sealed = new SealedObject(response, object_cipher);
 					to_be_sent.addObject(hmac_msg_sealed);
 								
-					rawHamc = mac.doFinal(convertToBytes(hmac_msg_sealed));
-					to_be_sent.addObject(rawHamc); //add first object into array 
+					byte[] rawHamc_2 = mac.doFinal(convertToBytes(hmac_msg_sealed));
+					to_be_sent.addObject(rawHamc_2);
 						
 			   		output.writeObject(to_be_sent);
 				   	output.flush();
@@ -349,16 +351,18 @@ public class GroupThread extends Thread
 				}
 				if(instruction.equals("GET_SUBSET"))//Client wants a token
 				{
-					String username = (String)message.getObjContents().get(0); //Get the username
+					String username = (String)plaintext.getObjContents().get(1); //Get the username
 					ArrayList<String> subset = null;
 
 					//@SuppressWarnings("unchecked")
-					if(message.getObjContents().get(1) != null) {
-					    subset = new ArrayList<String>((ArrayList<String>)message.getObjContents().get(1));
+					if(plaintext.getObjContents().get(2) != null) {
+					    subset = new ArrayList<String>((ArrayList<String>)plaintext.getObjContents().get(2));
 				    }
 					if(username == null || subset == null)
 					{
 						response = new Envelope("FAIL");
+						response.addObject((Integer)t);	
+					    t++;
 						response.addObject(null);
 					}
 					else
@@ -368,31 +372,49 @@ public class GroupThread extends Thread
 						
 						//Respond to the client. On error, the client will receive a null token
 						response = new Envelope("OK");
+						response.addObject((Integer)t);	
+					    t++;
 						response.addObject(yourToken);
 					}
-					output.writeObject(response.encrypted(AES_key));
+					mac = Mac.getInstance("HmacSHA256", "BC");
+					mac.init(identity_key);
+
+					Envelope to_be_sent = new Envelope("RSP");
+								
+					Cipher object_cipher = Cipher.getInstance("AES/CBC/PKCS5Padding", "BC");
+					object_cipher.init(Cipher.ENCRYPT_MODE, AES_key);
+								
+					SealedObject hmac_msg_sealed = new SealedObject(response, object_cipher);
+					to_be_sent.addObject(hmac_msg_sealed);
+								
+					byte[] rawHamc_2 = mac.doFinal(convertToBytes(hmac_msg_sealed));
+					to_be_sent.addObject(rawHamc_2);
+						
+			   		output.writeObject(to_be_sent);
 					output.flush();
 					output.reset();
 				}
 				else if(instruction.equals("CUSER")) //Client wants to create a user
 				{
-					if(message.getObjContents().size() < 3)
+					if(plaintext.getObjContents().size() < 4)
 					{
 						response = new Envelope("FAIL");
+						response.addObject((Integer)t);	
+					    t++;
 					}
 					else
 					{
 						response = new Envelope("FAIL");
 						
-						if(message.getObjContents().get(0) != null) //index 0 is the username wanted to add 
+						if(plaintext.getObjContents().get(1) != null) //index 0 is the username wanted to add 
 						{
-							if(message.getObjContents().get(1) != null) //index 1 is the token from user requested
+							if(plaintext.getObjContents().get(2) != null) //index 1 is the token from user requested
 							{
-								if(message.getObjContents().get(2) != null)//index 2 is the public key of the user to be added
+								if(plaintext.getObjContents().get(3) != null)//index 2 is the public key of the user to be added
 								{
-									String username = (String)message.getObjContents().get(0); //Extract the username
-									UserToken yourToken = (UserToken)message.getObjContents().get(1); //Extract the token
-									PublicKey to_be_added = (PublicKey)message.getObjContents().get(2);//Extract the public key
+									String username = (String)plaintext.getObjContents().get(1); //Extract the username
+									UserToken yourToken = (UserToken)plaintext.getObjContents().get(2); //Extract the token
+									PublicKey to_be_added = (PublicKey)plaintext.getObjContents().get(3);//Extract the public key
 									if(createUser(username, yourToken, to_be_added))
 									{
 										response = new Envelope("OK"); //Success
@@ -400,28 +422,46 @@ public class GroupThread extends Thread
 								}
 							}
 						}
+						response.addObject((Integer)t);	
+					   	t++;
 					}
-					output.writeObject(response.encrypted(AES_key));
+					mac = Mac.getInstance("HmacSHA256", "BC");
+					mac.init(identity_key);
+
+					Envelope to_be_sent = new Envelope("RSP");
+								
+					Cipher object_cipher = Cipher.getInstance("AES/CBC/PKCS5Padding", "BC");
+					object_cipher.init(Cipher.ENCRYPT_MODE, AES_key);
+								
+					SealedObject hmac_msg_sealed = new SealedObject(response, object_cipher);
+					to_be_sent.addObject(hmac_msg_sealed);
+								
+					byte[] rawHamc_2 = mac.doFinal(convertToBytes(hmac_msg_sealed));
+					to_be_sent.addObject(rawHamc_2);
+						
+			   		output.writeObject(to_be_sent);
 					output.flush();
 					output.reset();
 				}
 				else if(instruction.equals("DUSER")) //Client wants to delete a user
 				{
 					
-					if(message.getObjContents().size() < 2)
+					if(plaintext.getObjContents().size() < 3)
 					{
 						response = new Envelope("FAIL");
+						response.addObject((Integer)t);	
+					    t++;
 					}
 					else
 					{
 						response = new Envelope("FAIL");
 						
-						if(message.getObjContents().get(0) != null)
+						if(plaintext.getObjContents().get(1) != null)
 						{
-							if(message.getObjContents().get(1) != null)
+							if(plaintext.getObjContents().get(2) != null)
 							{
-								String username = (String)message.getObjContents().get(0); //Extract the username
-								UserToken yourToken = (UserToken)message.getObjContents().get(1); //Extract the token
+								String username = (String)plaintext.getObjContents().get(1); //Extract the username
+								UserToken yourToken = (UserToken)plaintext.getObjContents().get(2); //Extract the token
 								
 								if(deleteUser(username, yourToken))
 								{
@@ -429,28 +469,46 @@ public class GroupThread extends Thread
 								}
 							}
 						}
+						response.addObject((Integer)t);	
+					   	t++;
 					}
-					
-					output.writeObject(response.encrypted(AES_key));
+
+					mac = Mac.getInstance("HmacSHA256", "BC");
+					mac.init(identity_key);
+
+					Envelope to_be_sent = new Envelope("RSP");
+								
+					Cipher object_cipher = Cipher.getInstance("AES/CBC/PKCS5Padding", "BC");
+					object_cipher.init(Cipher.ENCRYPT_MODE, AES_key);
+								
+					SealedObject hmac_msg_sealed = new SealedObject(response, object_cipher);
+					to_be_sent.addObject(hmac_msg_sealed);
+								
+					byte[] rawHamc_2 = mac.doFinal(convertToBytes(hmac_msg_sealed));
+					to_be_sent.addObject(rawHamc_2);
+						
+			   		output.writeObject(to_be_sent);
 					output.flush();
 					output.reset();
 				}
 				else if(instruction.equals("CGROUP")) //Client wants to create a group
 				{
-				    if(message.getObjContents().size() < 2)
+				    if(plaintext.getObjContents().size() < 3)
 					{
 						response = new Envelope("FAIL");
+						response.addObject((Integer)t);	
+					    t++;
 					}
 					else
 					{
 						response = new Envelope("FAIL");
 						
-						if(message.getObjContents().get(0) != null) //index 0 is the username wanted to add 
+						if(plaintext.getObjContents().get(1) != null) //index 0 is the username wanted to add 
 						{
-							if(message.getObjContents().get(1) != null) //index 1 is the token from user requested
+							if(plaintext.getObjContents().get(2) != null) //index 1 is the token from user requested
 							{
-								String groupname = (String)message.getObjContents().get(0); //Extract the username
-								UserToken yourToken = (UserToken)message.getObjContents().get(1); //Extract the token
+								String groupname = (String)plaintext.getObjContents().get(1); //Extract the username
+								UserToken yourToken = (UserToken)plaintext.getObjContents().get(2); //Extract the token
 								
 								if(createGroup(groupname, yourToken))
 								{
@@ -458,89 +516,143 @@ public class GroupThread extends Thread
 								}
 							}
 						}
+						response.addObject((Integer)t);	
+					   	t++;
 					}
 		
-					output.writeObject(response.encrypted(AES_key));
+					mac = Mac.getInstance("HmacSHA256", "BC");
+					mac.init(identity_key);
+
+					Envelope to_be_sent = new Envelope("RSP");
+								
+					Cipher object_cipher = Cipher.getInstance("AES/CBC/PKCS5Padding", "BC");
+					object_cipher.init(Cipher.ENCRYPT_MODE, AES_key);
+								
+					SealedObject hmac_msg_sealed = new SealedObject(response, object_cipher);
+					to_be_sent.addObject(hmac_msg_sealed);
+								
+					byte[] rawHamc_2 = mac.doFinal(convertToBytes(hmac_msg_sealed));
+					to_be_sent.addObject(rawHamc_2);
+						
+			   		output.writeObject(to_be_sent);
 					output.flush();
 					output.reset();
 				}
 				else if(instruction.equals("DGROUP")) //Client wants to delete a group
 				{
-				    if(message.getObjContents().size() < 2)
+				    if(plaintext.getObjContents().size() < 3)
 					{
 						response = new Envelope("FAIL");
+						response.addObject((Integer)t);	
+					    t++;
 					}
 					else
 					{
 						response = new Envelope("FAIL");
 						
-						if(message.getObjContents().get(0) != null)
+						if(plaintext.getObjContents().get(1) != null)
 						{
-							if(message.getObjContents().get(1) != null)
+							if(plaintext.getObjContents().get(2) != null)
 							{
-								String groupname = (String)message.getObjContents().get(0); //Extract the username
-								UserToken yourToken = (UserToken)message.getObjContents().get(1); //Extract the token
+								String groupname = (String)plaintext.getObjContents().get(1); //Extract the username
+								UserToken yourToken = (UserToken)plaintext.getObjContents().get(2); //Extract the token
 								
 								if(deleteGroup(groupname, yourToken))
 								{
 									response = new Envelope("OK"); //Success
+									response.addObject((Integer)t);	
 								}
 							}
 						}
+						response.addObject((Integer)t);	
+					    t++;
 					}
 					
-					output.writeObject(response.encrypted(AES_key));
+					mac = Mac.getInstance("HmacSHA256", "BC");
+					mac.init(identity_key);
+
+					Envelope to_be_sent = new Envelope("RSP");
+								
+					Cipher object_cipher = Cipher.getInstance("AES/CBC/PKCS5Padding", "BC");
+					object_cipher.init(Cipher.ENCRYPT_MODE, AES_key);
+								
+					SealedObject hmac_msg_sealed = new SealedObject(response, object_cipher);
+					to_be_sent.addObject(hmac_msg_sealed);
+								
+					byte[] rawHamc_2 = mac.doFinal(convertToBytes(hmac_msg_sealed));
+					to_be_sent.addObject(rawHamc_2);
+						
+			   		output.writeObject(to_be_sent);
 					output.flush();
 					output.reset();
 				}
 				else if(instruction.equals("LMEMBERS")) //Client wants a list of members in a group
 				{
 					response = new Envelope("FAIL");
+					response.addObject((Integer)t);	
+					t++;
 					response.addObject(null);
 					
-					if(!(message.getObjContents().size() < 2))
+					if(!(plaintext.getObjContents().size() < 3))
 					{
 							
-						if(message.getObjContents().get(0) != null) 
+						if(plaintext.getObjContents().get(1) != null) 
 						{
-							if(message.getObjContents().get(1) != null)
+							if(plaintext.getObjContents().get(2) != null)
 							{
-								String groupname = (String)message.getObjContents().get(0); //Extract the group
-								UserToken yourToken = (UserToken)message.getObjContents().get(1); //Extract the token
+								String groupname = (String)plaintext.getObjContents().get(1); //Extract the group
+								UserToken yourToken = (UserToken)plaintext.getObjContents().get(2); //Extract the token
 								
 								List<String> returnedMember = listMembers(groupname, yourToken);
 
 								if(returnedMember != null)
 								{
 									response = new Envelope("OK"); //Success
+									response.addObject((Integer)t);	
 									response.addObject(returnedMember);
 								}
 							}
 						}
 					}
-					output.writeObject(response.encrypted(AES_key));
+					mac = Mac.getInstance("HmacSHA256", "BC");
+					mac.init(identity_key);
+
+					Envelope to_be_sent = new Envelope("RSP");
+								
+					Cipher object_cipher = Cipher.getInstance("AES/CBC/PKCS5Padding", "BC");
+					object_cipher.init(Cipher.ENCRYPT_MODE, AES_key);
+								
+					SealedObject hmac_msg_sealed = new SealedObject(response, object_cipher);
+					to_be_sent.addObject(hmac_msg_sealed);
+								
+					byte[] rawHamc_2 = mac.doFinal(convertToBytes(hmac_msg_sealed));
+					to_be_sent.addObject(rawHamc_2);
+						
+			   		output.writeObject(to_be_sent);
 					output.flush();
 					output.reset();
 				}
 				else if(instruction.equals("AUSERTOGROUP")) //Client wants to add user to a group
 				{
-				    if(message.getObjContents().size() < 3) //three objects in this method 
+				    if(plaintext.getObjContents().size() < 4) //three objects in this method 
 					{
 						response = new Envelope("FAIL");
+						response.addObject((Integer)t);	
+						t++;
 					}
 					else
 					{
 						response = new Envelope("FAIL");
 						
-						if(message.getObjContents().get(0) != null) //index 0 is the username wanted to add 
+						if(plaintext.getObjContents().get(1) != null) //index 0 is the username wanted to add 
 						{
-							if(message.getObjContents().get(1) != null) //index 1 is the group name to be added
+							if(plaintext.getObjContents().get(2) != null) //index 1 is the group name to be added
 							{
-								if(message.getObjContents().get(2) != null) // index 2 is the token from user requested
+								if(plaintext.getObjContents().get(3) != null) // index 2 is the token from user requested
 								{
-									String username = (String)message.getObjContents().get(0); //Extract the username
-									String groupname = (String)message.getObjContents().get(1);
-									UserToken yourToken = (UserToken)message.getObjContents().get(2); //Extract the token
+									String username = (String)plaintext.getObjContents().get(1); //Extract the username
+									String groupname = (String)plaintext.getObjContents().get(2);
+									UserToken yourToken = (UserToken)plaintext.getObjContents().get(3); //Extract the token
 								
 									if(addUserToGroup(username, groupname, yourToken))
 									{
@@ -549,30 +661,48 @@ public class GroupThread extends Thread
 								}
 							}
 						}
+						response.addObject((Integer)t);	
+						t++;
 					}
-					output.writeObject(response.encrypted(AES_key));
+					mac = Mac.getInstance("HmacSHA256", "BC");
+					mac.init(identity_key);
+
+					Envelope to_be_sent = new Envelope("RSP");
+								
+					Cipher object_cipher = Cipher.getInstance("AES/CBC/PKCS5Padding", "BC");
+					object_cipher.init(Cipher.ENCRYPT_MODE, AES_key);
+								
+					SealedObject hmac_msg_sealed = new SealedObject(response, object_cipher);
+					to_be_sent.addObject(hmac_msg_sealed);
+								
+					byte[] rawHamc_2 = mac.doFinal(convertToBytes(hmac_msg_sealed));
+					to_be_sent.addObject(rawHamc_2);
+						
+			   		output.writeObject(to_be_sent);
 					output.flush();
 					output.reset();
 				}
 				else if(instruction.equals("RUSERFROMGROUP")) //Client wants to remove user from a group
 				{
-				    if(message.getObjContents().size() < 3) //three objects in this method 
+				    if(plaintext.getObjContents().size() < 4) //three objects in this method 
 					{
 						response = new Envelope("FAIL");
+						response.addObject((Integer)t);	
+						t++;
 					}
 					else
 					{
 						response = new Envelope("FAIL");
 						
-						if(message.getObjContents().get(0) != null) //index 0 is the username wanted to add 
+						if(plaintext.getObjContents().get(1) != null) //index 0 is the username wanted to add 
 						{
-							if(message.getObjContents().get(1) != null) //index 1 is the group name to be added
+							if(plaintext.getObjContents().get(2) != null) //index 1 is the group name to be added
 							{
-								if(message.getObjContents().get(2) != null) // index 2 is the token from user requested
+								if(plaintext.getObjContents().get(3) != null) // index 2 is the token from user requested
 								{
-									String username = (String)message.getObjContents().get(0); //Extract the username
-									String groupname = (String)message.getObjContents().get(1);
-									UserToken yourToken = (UserToken)message.getObjContents().get(2); //Extract the token
+									String username = (String)plaintext.getObjContents().get(1); //Extract the username
+									String groupname = (String)plaintext.getObjContents().get(2);
+									UserToken yourToken = (UserToken)plaintext.getObjContents().get(3); //Extract the token
 								
 									if(deleteUserFromGroup(username, groupname, yourToken))
 									{
@@ -581,8 +711,24 @@ public class GroupThread extends Thread
 								}
 							}
 						}
+						response.addObject((Integer)t);	
+						t++;
 					}
-					output.writeObject(response.encrypted(AES_key));
+					mac = Mac.getInstance("HmacSHA256", "BC");
+					mac.init(identity_key);
+
+					Envelope to_be_sent = new Envelope("RSP");
+								
+					Cipher object_cipher = Cipher.getInstance("AES/CBC/PKCS5Padding", "BC");
+					object_cipher.init(Cipher.ENCRYPT_MODE, AES_key);
+								
+					SealedObject hmac_msg_sealed = new SealedObject(response, object_cipher);
+					to_be_sent.addObject(hmac_msg_sealed);
+								
+					byte[] rawHamc_2 = mac.doFinal(convertToBytes(hmac_msg_sealed));
+					to_be_sent.addObject(rawHamc_2);
+						
+			   		output.writeObject(to_be_sent);
 					output.flush();
 					output.reset();
 				}
@@ -923,7 +1069,7 @@ public class GroupThread extends Thread
 		}
 	}
 
-	private byte[] convertToBytes(SealedObject object){
+	private byte[] convertToBytes(Object object){
  		try{ 
     	   	ByteArrayOutputStream bos = new ByteArrayOutputStream();
          	ObjectOutput out = new ObjectOutputStream(bos);

@@ -125,9 +125,11 @@ public class GroupClient extends Client implements GroupClientInterface {
 								{
 									Envelope plaintext = (Envelope)((SealedObject)second_response.getObjContents().get(0)).getObject(AES_key);
 									t = (Integer)plaintext.getObjContents().get(0);
-									System.out.println(t);
+									t++;
 									if((plaintext.getMessage()).equals("OK"))
+									{
 										return true;
+									}
 								}
 							}
 						}
@@ -152,41 +154,71 @@ public class GroupClient extends Client implements GroupClientInterface {
 		 		 	
 			//Tell the server to return a token.
 			message = new Envelope("GET");
+			message.addObject((Integer)t); //always put t as the first one 
+			t++;//increase t to keep order 
 			message.addObject(username); //Add user name string
-			ByteBuffer bb = ByteBuffer.allocate(4);
-			bb.putInt(t+1);
-			message.addObject(bb.array());
-			
 
+			Mac mac = Mac.getInstance("HmacSHA256", "BC");
+			mac.init(identity_key);
 
-			//output.reset();
-			output.writeObject(message.encrypted(AES_key));
+			Envelope to_be_sent = new Envelope("REQ");
+												
+			Cipher object_cipher = Cipher.getInstance("AES/CBC/PKCS5Padding", "BC");
+			object_cipher.init(Cipher.ENCRYPT_MODE, AES_key);
+								
+			SealedObject hmac_msg_sealed = new SealedObject(message, object_cipher);
+			to_be_sent.addObject(hmac_msg_sealed);
+													
+			byte[] rawHamc = mac.doFinal(convertToBytes(hmac_msg_sealed));
+			to_be_sent.addObject(rawHamc);
+
+			output.reset();
+			output.writeObject(to_be_sent);
 			output.flush();
 			output.reset();
 		
 			//Get the response from the server
-			response = (Envelope)((SealedObject)input.readObject()).getObject(AES_key);
-			
+			response = (Envelope)input.readObject();
+
+			byte[] msg_combined_encrypted = convertToBytes((SealedObject)response.getObjContents().get(0));
+			mac = Mac.getInstance("HmacSHA256", "BC");
+			mac.init(identity_key);
+			byte[] rawHamc_2 = mac.doFinal(msg_combined_encrypted);
+			byte[] Hmac_passed = (byte[])response.getObjContents().get(1);
+			if(Arrays.equals(rawHamc_2, Hmac_passed))
+			{
+				Envelope plaintext = (Envelope)((SealedObject)response.getObjContents().get(0)).getObject(AES_key);
+				if((plaintext.getMessage()).equals("OK"))
+				{
+					//If there is a token in the Envelope, return it 
+					ArrayList<Object> temp = plaintext.getObjContents();
+				
+					if(temp != null && temp.size() == 2)
+					{
+							int t_received = (Integer)temp.get(0);
+							if(t_received == t)
+							{
+								token = (UserToken)temp.get(1);
+								t++;
+								return token;
+							}
+							else
+							{
+								System.out.println("The message is replayed/reordered.");
+							}
+					}
+				}
+			}										
 			//System.out.printf("Server response msg: %s\n", response.getMessage());
 			//Successful response
-			if(response.getMessage().equals("OK"))
-			{
-				//If there is a token in the Envelope, return it 
-				ArrayList<Object> temp = response.getObjContents();
-				
-				if(temp != null && temp.size() == 1)
-				{
-					token = (UserToken)temp.get(0);
-					return token;
-				}
-			}
-			
+			t++;
 			return null;
 		}
 		catch(Exception e)
 		{
 			System.err.println("Error: " + e.getMessage());
 			e.printStackTrace(System.err);
+			t++;
 			return null;
 		}		
 	 }
@@ -200,34 +232,70 @@ public class GroupClient extends Client implements GroupClientInterface {
 		 		 	
 			//Tell the server to return a token.
 			message = new Envelope("GET_SUBSET");
+			message.addObject((Integer)t); //always put t as the first one 
+			t++;//increase t to keep order 
 			message.addObject(username); //Add user name string
 			message.addObject(groups);
-			output.writeObject(message.encrypted(AES_key));
+
+			Mac mac = Mac.getInstance("HmacSHA256", "BC");
+			mac.init(identity_key);
+
+			Envelope to_be_sent = new Envelope("REQ");
+												
+			Cipher object_cipher = Cipher.getInstance("AES/CBC/PKCS5Padding", "BC");
+			object_cipher.init(Cipher.ENCRYPT_MODE, AES_key);
+								
+			SealedObject hmac_msg_sealed = new SealedObject(message, object_cipher);
+			to_be_sent.addObject(hmac_msg_sealed);
+													
+			byte[] rawHamc = mac.doFinal(convertToBytes(hmac_msg_sealed));
+			to_be_sent.addObject(rawHamc);
+
+			output.reset();
+			output.writeObject(to_be_sent);
+			output.flush();
 			output.reset();
 		
 			//Get the response from the server
-			response = (Envelope)((SealedObject)input.readObject()).getObject(AES_key);
+			response = (Envelope)input.readObject();
 			
-			//Successful response
-			if(response.getMessage().equals("OK"))
+			byte[] msg_combined_encrypted = convertToBytes((SealedObject)response.getObjContents().get(0));
+			mac = Mac.getInstance("HmacSHA256", "BC");
+			mac.init(identity_key);
+			byte[] rawHamc_2 = mac.doFinal(msg_combined_encrypted);
+			byte[] Hmac_passed = (byte[])response.getObjContents().get(1);
+			if(Arrays.equals(rawHamc_2, Hmac_passed))
 			{
-				//If there is a token in the Envelope, return it 
-				ArrayList<Object> temp = null;
-				temp = response.getObjContents();
-				
-				if(temp.size() == 1)
+				Envelope plaintext = (Envelope)((SealedObject)response.getObjContents().get(0)).getObject(AES_key);
+				if((plaintext.getMessage()).equals("OK"))
 				{
-					token = (UserToken)temp.get(0);
-					return token;
+					//If there is a token in the Envelope, return it 
+					ArrayList<Object> temp = plaintext.getObjContents();
+				
+					if(temp != null && temp.size() == 2)
+					{
+						int t_received = (Integer)plaintext.getObjContents().get(0);
+						if(t_received == t)
+						{
+							token = (UserToken)temp.get(1);
+							t++;
+							return token;
+						}
+						else
+						{
+							System.out.println("The message is replayed/reordered.");
+						}
+					}
 				}
 			}
-			
+			t++;
 			return null;
 		}
 		catch(Exception e)
 		{
 			System.err.println("Error: " + e.getMessage());
 			e.printStackTrace(System.err);
+			t++;
 			return null;
 		}		
 	 }
@@ -238,25 +306,63 @@ public class GroupClient extends Client implements GroupClientInterface {
 				Envelope message = null, response = null;
 				//Tell the server to create a user
 				message = new Envelope("CUSER");
+				message.addObject((Integer)t); //always put t as the first one 
+				t++;//increase t to keep order 
 				message.addObject(username); //Add user name string
 				message.addObject(token); //Add the requester's token
 				message.addObject(to_be_added);
-				output.writeObject(message.encrypted(AES_key));
+
+				Mac mac = Mac.getInstance("HmacSHA256", "BC");
+				mac.init(identity_key);
+
+				Envelope to_be_sent = new Envelope("REQ");
+												
+				Cipher object_cipher = Cipher.getInstance("AES/CBC/PKCS5Padding", "BC");
+				object_cipher.init(Cipher.ENCRYPT_MODE, AES_key);
+								
+				SealedObject hmac_msg_sealed = new SealedObject(message, object_cipher);
+				to_be_sent.addObject(hmac_msg_sealed);
+													
+				byte[] rawHamc = mac.doFinal(convertToBytes(hmac_msg_sealed));
+				to_be_sent.addObject(rawHamc);
+
+				output.reset();
+				output.writeObject(to_be_sent);
+				output.flush();
+				output.reset();
 			
-				response = (Envelope)((SealedObject)input.readObject()).getObject(AES_key);
+				response = (Envelope)input.readObject();
 				
-				//If server indicates success, return true
-				if(response.getMessage().equals("OK"))
+				byte[] msg_combined_encrypted = convertToBytes((SealedObject)response.getObjContents().get(0));
+				mac = Mac.getInstance("HmacSHA256", "BC");
+				mac.init(identity_key);
+				byte[] rawHamc_2 = mac.doFinal(msg_combined_encrypted);
+				byte[] Hmac_passed = (byte[])response.getObjContents().get(1);
+				if(Arrays.equals(rawHamc_2, Hmac_passed))
 				{
-					return true;
+					Envelope plaintext = (Envelope)((SealedObject)response.getObjContents().get(0)).getObject(AES_key);
+					if((plaintext.getMessage()).equals("OK"))
+					{
+						int t_received = (Integer)plaintext.getObjContents().get(0);
+						if(t_received == t)
+						{
+							t++;
+							return true;
+						}
+						else
+						{
+							System.out.println("The message is replayed/reordered.");
+						}
+					}
 				}
-				
+				t++;
 				return false;
 			}
 			catch(Exception e)
 			{
 				System.err.println("Error: " + e.getMessage());
 				e.printStackTrace(System.err);
+				t++;
 				return false;
 			}
 	 }
@@ -269,24 +375,62 @@ public class GroupClient extends Client implements GroupClientInterface {
 			 
 				//Tell the server to delete a user
 				message = new Envelope("DUSER");
-				message.addObject(username); //Add user name
-				message.addObject(token);  //Add requester's token
-				output.writeObject(message.encrypted(AES_key));
+				message.addObject((Integer)t); //always put t as the first one 
+				t++;//increase t to keep order 
+				message.addObject(username); //Add user name string
+				message.addObject(token); //Add the requester's token
+
+				Mac mac = Mac.getInstance("HmacSHA256", "BC");
+				mac.init(identity_key);
+
+				Envelope to_be_sent = new Envelope("REQ");
+												
+				Cipher object_cipher = Cipher.getInstance("AES/CBC/PKCS5Padding", "BC");
+				object_cipher.init(Cipher.ENCRYPT_MODE, AES_key);
+								
+				SealedObject hmac_msg_sealed = new SealedObject(message, object_cipher);
+				to_be_sent.addObject(hmac_msg_sealed);
+													
+				byte[] rawHamc = mac.doFinal(convertToBytes(hmac_msg_sealed));
+				to_be_sent.addObject(rawHamc);
+
+				output.reset();
+				output.writeObject(to_be_sent);
+				output.flush();
+				output.reset();
 			
-				response = (Envelope)((SealedObject)input.readObject()).getObject(AES_key);
+				response = (Envelope)input.readObject();
 				
-				//If server indicates success, return true
-				if(response.getMessage().equals("OK"))
+				byte[] msg_combined_encrypted = convertToBytes((SealedObject)response.getObjContents().get(0));
+				mac = Mac.getInstance("HmacSHA256", "BC");
+				mac.init(identity_key);
+				byte[] rawHamc_2 = mac.doFinal(msg_combined_encrypted);
+				byte[] Hmac_passed = (byte[])response.getObjContents().get(1);
+				if(Arrays.equals(rawHamc_2, Hmac_passed))
 				{
-					return true;
+					Envelope plaintext = (Envelope)((SealedObject)response.getObjContents().get(0)).getObject(AES_key);
+					if((plaintext.getMessage()).equals("OK"))
+					{
+						int t_received = (Integer)plaintext.getObjContents().get(0);
+						if(t_received == t)
+						{
+							t++;
+							return true;
+						}
+						else
+						{
+							System.out.println("The message is replayed/reordered.");
+						}
+					}
 				}
-				
+				t++;
 				return false;
 			}
 			catch(Exception e)
 			{
 				System.err.println("Error: " + e.getMessage());
 				e.printStackTrace(System.err);
+				t++;
 				return false;
 			}
 	 }
@@ -298,24 +442,62 @@ public class GroupClient extends Client implements GroupClientInterface {
 				Envelope message = null, response = null;
 				//Tell the server to create a group
 				message = new Envelope("CGROUP");
+				message.addObject((Integer)t); //always put t as the first one 
+				t++;//increase t to keep order 
 				message.addObject(groupname); //Add the group name string
 				message.addObject(token); //Add the requester's token
-				output.writeObject(message.encrypted(AES_key)); 
+
+				Mac mac = Mac.getInstance("HmacSHA256", "BC");
+				mac.init(identity_key);
+
+				Envelope to_be_sent = new Envelope("REQ");
+												
+				Cipher object_cipher = Cipher.getInstance("AES/CBC/PKCS5Padding", "BC");
+				object_cipher.init(Cipher.ENCRYPT_MODE, AES_key);
+								
+				SealedObject hmac_msg_sealed = new SealedObject(message, object_cipher);
+				to_be_sent.addObject(hmac_msg_sealed);
+													
+				byte[] rawHamc = mac.doFinal(convertToBytes(hmac_msg_sealed));
+				to_be_sent.addObject(rawHamc);
+
+				output.reset();
+				output.writeObject(to_be_sent);
+				output.flush();
+				output.reset(); 
 			
-				response = (Envelope)((SealedObject)input.readObject()).getObject(AES_key);
+				response = (Envelope)input.readObject();
 				
-				//If server indicates success, return true
-				if(response.getMessage().equals("OK"))
+				byte[] msg_combined_encrypted = convertToBytes((SealedObject)response.getObjContents().get(0));
+				mac = Mac.getInstance("HmacSHA256", "BC");
+				mac.init(identity_key);
+				byte[] rawHamc_2 = mac.doFinal(msg_combined_encrypted);
+				byte[] Hmac_passed = (byte[])response.getObjContents().get(1);
+				if(Arrays.equals(rawHamc_2, Hmac_passed))
 				{
-					return true;
+					Envelope plaintext = (Envelope)((SealedObject)response.getObjContents().get(0)).getObject(AES_key);
+					if((plaintext.getMessage()).equals("OK"))
+					{
+						int t_received = (Integer)plaintext.getObjContents().get(0);
+						if(t_received == t)
+						{
+							t++;
+							return true;
+						}
+						else
+						{
+							System.out.println("The message is replayed/reordered.");
+						}
+					}
 				}
-				
+				t++;
 				return false;
 			}
 			catch(Exception e)
 			{
 				System.err.println("Error: " + e.getMessage());
 				e.printStackTrace(System.err);
+				t++;
 				return false;
 			}
 	 }
@@ -327,23 +509,62 @@ public class GroupClient extends Client implements GroupClientInterface {
 				Envelope message = null, response = null;
 				//Tell the server to delete a group
 				message = new Envelope("DGROUP");
-				message.addObject(groupname); //Add group name string
-				message.addObject(token); //Add requester's token
-				output.writeObject(message.encrypted(AES_key)); 
+				message.addObject((Integer)t); //always put t as the first one 
+				t++;//increase t to keep order 
+				message.addObject(groupname); //Add the group name string
+				message.addObject(token); //Add the requester's token
+
+				Mac mac = Mac.getInstance("HmacSHA256", "BC");
+				mac.init(identity_key);
+
+				Envelope to_be_sent = new Envelope("REQ");
+												
+				Cipher object_cipher = Cipher.getInstance("AES/CBC/PKCS5Padding", "BC");
+				object_cipher.init(Cipher.ENCRYPT_MODE, AES_key);
+								
+				SealedObject hmac_msg_sealed = new SealedObject(message, object_cipher);
+				to_be_sent.addObject(hmac_msg_sealed);
+													
+				byte[] rawHamc = mac.doFinal(convertToBytes(hmac_msg_sealed));
+				to_be_sent.addObject(rawHamc);
+
+				output.reset();
+				output.writeObject(to_be_sent);
+				output.flush();
+				output.reset(); 
 			
-				response = (Envelope)((SealedObject)input.readObject()).getObject(AES_key);
-				//If server indicates success, return true
-				if(response.getMessage().equals("OK"))
-				{
-					return true;
-				}
+				response = (Envelope)input.readObject();
 				
+				byte[] msg_combined_encrypted = convertToBytes((SealedObject)response.getObjContents().get(0));
+				mac = Mac.getInstance("HmacSHA256", "BC");
+				mac.init(identity_key);
+				byte[] rawHamc_2 = mac.doFinal(msg_combined_encrypted);
+				byte[] Hmac_passed = (byte[])response.getObjContents().get(1);
+				if(Arrays.equals(rawHamc_2, Hmac_passed))
+				{
+					Envelope plaintext = (Envelope)((SealedObject)response.getObjContents().get(0)).getObject(AES_key);
+					if((plaintext.getMessage()).equals("OK"))
+					{
+						int t_received = (Integer)plaintext.getObjContents().get(0);
+						if(t_received == t)
+						{
+							t++;
+							return true;
+						}
+						else
+						{
+							System.out.println("The message is replayed/reordered.");
+						}
+					}
+				}
+				t++;
 				return false;
 			}
 			catch(Exception e)
 			{
 				System.err.println("Error: " + e.getMessage());
 				e.printStackTrace(System.err);
+				t++;
 				return false;
 			}
 	 }
@@ -356,25 +577,61 @@ public class GroupClient extends Client implements GroupClientInterface {
 			 Envelope message = null, response = null;
 			 //Tell the server to return the member list
 			 message = new Envelope("LMEMBERS");
-			 message.addObject(group); //Add group name string
-			 message.addObject(token); //Add requester's token
-			 output.writeObject(message.encrypted(AES_key)); 
-			 
-			 response = (Envelope)((SealedObject)input.readObject()).getObject(AES_key);
-			 
-			 //If server indicates success, return the member list
-			 if(response.getMessage().equals("OK"))
-			 { 
-				return (List<String>)response.getObjContents().get(0); //This cast creates compiler warnings. Sorry.
-			 }
-				
-			 return null;
-			 
+			 message.addObject((Integer)t); //always put t as the first one 
+			 t++;//increase t to keep order 
+			 message.addObject(group); //Add the group name string
+			 message.addObject(token); //Add the requester's token
+
+			 Mac mac = Mac.getInstance("HmacSHA256", "BC");
+			 mac.init(identity_key);
+
+			 Envelope to_be_sent = new Envelope("REQ");							
+			 Cipher object_cipher = Cipher.getInstance("AES/CBC/PKCS5Padding", "BC");
+			 object_cipher.init(Cipher.ENCRYPT_MODE, AES_key);
+								
+			 SealedObject hmac_msg_sealed = new SealedObject(message, object_cipher);
+			 to_be_sent.addObject(hmac_msg_sealed);
+													
+			 byte[] rawHamc = mac.doFinal(convertToBytes(hmac_msg_sealed));
+			 to_be_sent.addObject(rawHamc);
+
+			 output.reset();
+			 output.writeObject(to_be_sent);
+			 output.flush();
+			 output.reset(); 
+			
+			response = (Envelope)input.readObject();
+			
+			byte[] msg_combined_encrypted = convertToBytes((SealedObject)response.getObjContents().get(0));
+			mac = Mac.getInstance("HmacSHA256", "BC");
+			mac.init(identity_key);
+			byte[] rawHamc_2 = mac.doFinal(msg_combined_encrypted);
+			byte[] Hmac_passed = (byte[])response.getObjContents().get(1);
+			if(Arrays.equals(rawHamc_2, Hmac_passed))
+			{
+				Envelope plaintext = (Envelope)((SealedObject)response.getObjContents().get(0)).getObject(AES_key);
+				if((plaintext.getMessage()).equals("OK"))
+				{
+					int t_received = (Integer)plaintext.getObjContents().get(0);
+					if(t_received == t)
+					{
+						t++;
+						return (List<String>)plaintext.getObjContents().get(1);
+					}
+					else
+					{
+						System.out.println("The message is replayed/reordered.");
+					}
+				}
+			}
+			t++;
+			return null;
 		 }
 		 catch(Exception e)
 			{
 				System.err.println("Error: " + e.getMessage());
 				e.printStackTrace(System.err);
+				t++;
 				return null;
 			}
 	 }
@@ -386,24 +643,63 @@ public class GroupClient extends Client implements GroupClientInterface {
 				Envelope message = null, response = null;
 				//Tell the server to add a user to the group
 				message = new Envelope("AUSERTOGROUP");
-				message.addObject(username); //Add user name string
+				message.addObject((Integer)t); //always put t as the first one 
+			 	t++;//increase t to keep order 
+			 	message.addObject(username); //Add user name string
 				message.addObject(groupname); //Add group name string
 				message.addObject(token); //Add requester's token
-				output.writeObject(message.encrypted(AES_key)); 
+
+			 	Mac mac = Mac.getInstance("HmacSHA256", "BC");
+			 	mac.init(identity_key);
+
+			 	Envelope to_be_sent = new Envelope("REQ");
+												
+			 	Cipher object_cipher = Cipher.getInstance("AES/CBC/PKCS5Padding", "BC");
+			 	object_cipher.init(Cipher.ENCRYPT_MODE, AES_key);
+								
+			 	SealedObject hmac_msg_sealed = new SealedObject(message, object_cipher);
+			 	to_be_sent.addObject(hmac_msg_sealed);
+													
+				byte[] rawHamc = mac.doFinal(convertToBytes(hmac_msg_sealed));
+			 	to_be_sent.addObject(rawHamc);
+
+				output.reset();
+				output.writeObject(to_be_sent);
+				output.flush();
+				output.reset(); 
 			
-				response = (Envelope)((SealedObject)input.readObject()).getObject(AES_key);
-				//If server indicates success, return true
-				if(response.getMessage().equals("OK"))
-				{
-					return true;
-				}
+				response = (Envelope)input.readObject();
 				
+				byte[] msg_combined_encrypted = convertToBytes((SealedObject)response.getObjContents().get(0));
+				mac = Mac.getInstance("HmacSHA256", "BC");
+				mac.init(identity_key);
+				byte[] rawHamc_2 = mac.doFinal(msg_combined_encrypted);
+				byte[] Hmac_passed = (byte[])response.getObjContents().get(1);
+				if(Arrays.equals(rawHamc_2, Hmac_passed))
+				{
+					Envelope plaintext = (Envelope)((SealedObject)response.getObjContents().get(0)).getObject(AES_key);
+					if((plaintext.getMessage()).equals("OK"))
+					{
+						int t_received = (Integer)plaintext.getObjContents().get(0);
+						if(t_received == t)
+						{
+							t++;
+							return true;
+						}
+						else
+						{
+							System.out.println("The message is replayed/reordered.");
+						}
+					}
+				}
+				t++;
 				return false;
 			}
 			catch(Exception e)
 			{
 				System.err.println("Error: " + e.getMessage());
 				e.printStackTrace(System.err);
+				t++;
 				return false;
 			}
 	 }
@@ -415,24 +711,63 @@ public class GroupClient extends Client implements GroupClientInterface {
 				Envelope message = null, response = null;
 				//Tell the server to remove a user from the group
 				message = new Envelope("RUSERFROMGROUP");
-				message.addObject(username); //Add user name string
+				message.addObject((Integer)t); //always put t as the first one 
+			 	t++;//increase t to keep order 
+			 	message.addObject(username); //Add user name string
 				message.addObject(groupname); //Add group name string
 				message.addObject(token); //Add requester's token
-				output.writeObject(message.encrypted(AES_key));
+
+			 	Mac mac = Mac.getInstance("HmacSHA256", "BC");
+			 	mac.init(identity_key);
+
+			 	Envelope to_be_sent = new Envelope("REQ");
+												
+			 	Cipher object_cipher = Cipher.getInstance("AES/CBC/PKCS5Padding", "BC");
+			 	object_cipher.init(Cipher.ENCRYPT_MODE, AES_key);
+								
+			 	SealedObject hmac_msg_sealed = new SealedObject(message, object_cipher);
+			 	to_be_sent.addObject(hmac_msg_sealed);
+													
+				byte[] rawHamc = mac.doFinal(convertToBytes(hmac_msg_sealed));
+			 	to_be_sent.addObject(rawHamc);
+
+				output.reset();
+				output.writeObject(to_be_sent);
+				output.flush();
+				output.reset(); 
 			
-				response = (Envelope)((SealedObject)input.readObject()).getObject(AES_key);
-				//If server indicates success, return true
-				if(response.getMessage().equals("OK"))
-				{
-					return true;
-				}
+				response = (Envelope)input.readObject();
 				
+				byte[] msg_combined_encrypted = convertToBytes((SealedObject)response.getObjContents().get(0));
+				mac = Mac.getInstance("HmacSHA256", "BC");
+				mac.init(identity_key);
+				byte[] rawHamc_2 = mac.doFinal(msg_combined_encrypted);
+				byte[] Hmac_passed = (byte[])response.getObjContents().get(1);
+				if(Arrays.equals(rawHamc_2, Hmac_passed))
+				{
+					Envelope plaintext = (Envelope)((SealedObject)response.getObjContents().get(0)).getObject(AES_key);
+					if((plaintext.getMessage()).equals("OK"))
+					{
+						int t_received = (Integer)plaintext.getObjContents().get(0);
+						if(t_received == t)
+						{
+							t++;
+							return true;
+						}
+						else
+						{
+							System.out.println("The message is replayed/reordered.");
+						}
+					}
+				}
+				t++;
 				return false;
 			}
 			catch(Exception e)
 			{
 				System.err.println("Error: " + e.getMessage());
 				e.printStackTrace(System.err);
+				t++;
 				return false;
 			}
 	 }
