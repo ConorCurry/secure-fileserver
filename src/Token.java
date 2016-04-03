@@ -64,7 +64,7 @@ public class Token implements UserToken, java.io.Serializable{
         return this.accessibleGroups;
     }
 
-    public List<SecretKey> getKeys()
+    public ArrayList<SecretKey> getKeys()
     {
     	return this.file_keys;
     }

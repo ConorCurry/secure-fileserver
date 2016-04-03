@@ -1,17 +1,13 @@
 /* FileClient provides all the client functionality regarding the file server */
 
-import java.io.File;
-import java.io.FileInputStream;
-import java.io.FileOutputStream;
-import java.io.ObjectInputStream;
-import java.io.ObjectOutputStream;
-import java.io.IOException;
+import java.io.*;
 import java.util.*;
 import org.bouncycastle.jce.provider.*;
 import javax.crypto.*;
 import javax.crypto.spec.IvParameterSpec;
 import javax.crypto.spec.SecretKeySpec;
 import java.security.*;
+import javax.xml.bind.DatatypeConverter;
 
 public class FileClient extends Client implements FileClientInterface {
 
@@ -137,7 +133,7 @@ public class FileClient extends Client implements FileClientInterface {
 		return true;
 	}
 
-	public boolean download(String sourceFile, String destFile, UserToken token) {
+	public boolean download(String sourceFile, String destFile, String group, UserToken token, ArrayList<SecretKey> key_list) {
 				if (sourceFile.charAt(0)=='/') {
 					sourceFile = sourceFile.substring(1);
 				}
@@ -154,11 +150,20 @@ public class FileClient extends Client implements FileClientInterface {
 					    env.addObject(sourceFile);
 					    env.addObject(token);
 					    output.writeObject(env.encrypted(symKey)); 
-					
+						
+						Cipher cipher = Cipher.getInstance("AES/CBC/NoPadding", "BC");
+			 			SecretKey decrypt_key = key_list.get(key_list.size() - 1);
+			 			System.out.println(DatatypeConverter.printBase64Binary(decrypt_key.getEncoded()));
+			 			byte[] IVarray = Arrays.copyOf(convertToBytes(group), 16);
+			 			System.out.println(new String(IVarray));
+
 					    env = (Envelope)((SealedObject)input.readObject()).getObject(symKey);
 					    
 						while (env.getMessage().compareTo("CHUNK")==0) { 
-								fos.write((byte[])env.getObjContents().get(0), 0, (Integer)env.getObjContents().get(1));
+								cipher.init(Cipher.DECRYPT_MODE, decrypt_key, new IvParameterSpec(IVarray));
+								byte[] decrypted_data = cipher.doFinal((byte[])env.getObjContents().get(0));
+								System.out.println(new String(decrypted_data));
+								fos.write(decrypted_data, 0, (Integer)env.getObjContents().get(1));
 								System.out.printf(".");
 								env = new Envelope("DOWNLOADF"); //Success
 								output.writeObject(env.encrypted(symKey));
@@ -236,8 +241,7 @@ public class FileClient extends Client implements FileClientInterface {
 			}
 	}
 
-	public boolean upload(String sourceFile, String destFile, String group,
-			UserToken token) {
+	public boolean upload(String sourceFile, String destFile, String group, UserToken token, ArrayList<SecretKey> key_list) {
 			
 		if (destFile.charAt(0)!='/') {
 			 destFile = "/" + destFile;
@@ -270,8 +274,13 @@ public class FileClient extends Client implements FileClientInterface {
 				 System.out.printf("Upload failed: %s\n", env.getMessage());
 				 return false;
 			 }
+
+			 Cipher cipher = Cipher.getInstance("AES/CBC/NoPadding", "BC");
+			 SecretKey encrypt_key = key_list.get(key_list.size() - 1);
+			 System.out.println(DatatypeConverter.printBase64Binary(encrypt_key.getEncoded()));
+			 byte[] IVarray = Arrays.copyOf(convertToBytes(group), 16);
+		 	 System.out.println(new String(IVarray));
 			 
-		 	
 			 do {
 				 byte[] buf = new byte[4096];
 				 	if (env.getMessage().compareTo("READY")!=0) {
@@ -286,16 +295,17 @@ public class FileClient extends Client implements FileClientInterface {
 						System.out.println("Read error");
 						return false;
 					}
-					
-					message.addObject(buf);
+					System.out.println(new String(buf));
+					//encrypt buf first 
+					cipher.init(Cipher.ENCRYPT_MODE, encrypt_key, new IvParameterSpec(IVarray));
+					byte[] encrypted_data = cipher.doFinal(buf);
+					System.out.println(n + " "+ encrypted_data.length);
+					message.addObject(cipher.doFinal(buf));
 					message.addObject(new Integer(n));
 					
 					output.writeObject(message.encrypted(symKey));
 					
-					
-					env = (Envelope)((SealedObject)input.readObject()).getObject(symKey);
-					
-										
+					env = (Envelope)((SealedObject)input.readObject()).getObject(symKey);					
 			 }
 			 while (fis.available()>0);		 
 					 
@@ -331,6 +341,20 @@ public class FileClient extends Client implements FileClientInterface {
 				}
 		 return true;
 	}
-
+	private byte[] convertToBytes(Object object){
+ 		try{ 
+    	   	ByteArrayOutputStream bos = new ByteArrayOutputStream();
+         	ObjectOutput out = new ObjectOutputStream(bos);
+        	out.writeObject(object);
+        	bos.close();
+        	out.close();
+        	return bos.toByteArray();
+    	} 
+    	catch (Exception byte_exception)
+    	{
+    		System.out.println("Can't convert object to a byte array");
+    		return null;
+    	}
+	}
 }
 

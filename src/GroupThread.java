@@ -280,12 +280,17 @@ public class GroupThread extends Thread
 			while(proceed)
 			{
 				Envelope message = (Envelope)input.readObject();
+				String instruction = "";
+				if(message.getMessage().equals("DISCONNECT"))
+				{
+					socket.close();
+					break; //end communication loop
+				}
 				byte[] msg_combined_encrypted = convertToBytes((SealedObject)(message.getObjContents().get(0)));
 				Mac mac = Mac.getInstance("HmacSHA256", "BC");
 				mac.init(identity_key);
 				byte[] rawHamc = mac.doFinal(msg_combined_encrypted);
 				byte[] Hmac_passed = (byte[])message.getObjContents().get(1);
-				String instruction = "";
 				Envelope plaintext = null;
 				if(Arrays.equals(rawHamc, Hmac_passed))
 				{
@@ -857,11 +862,6 @@ public class GroupThread extends Thread
 			   		output.writeObject(to_be_sent);
 					output.flush();
 					output.reset();
-				}
-				else if(instruction.equals("DISCONNECT")) //Client wants to disconnect
-				{
-					socket.close(); //Close the socket
-					proceed = false; //End this communication loop
 				}
 				//else
 				//{

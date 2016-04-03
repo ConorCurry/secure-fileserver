@@ -829,6 +829,7 @@ public class GroupClient extends Client implements GroupClientInterface {
 						{
 							token = (UserToken)temp.get(1);
 							t++;
+							System.out.println("Returning file server keys ");
 							return token;
 						}
 						else
@@ -858,7 +859,7 @@ public class GroupClient extends Client implements GroupClientInterface {
 			Envelope message = null, response = null;
 		 		 	
 			//Tell the server to return a token.
-			message = new Envelope("FILEOPERATION");
+			message = new Envelope("CONNECT_FILE_SERVER");
 			message.addObject((Integer)t); //always put t as the first one 
 			t++;//increase t to keep order 
 			message.addObject(username); //Add user name string

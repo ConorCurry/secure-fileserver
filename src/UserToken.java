@@ -1,5 +1,5 @@
 
-import java.util.List;
+import java.util.*;
 import java.security.*;
 import javax.crypto.*;
 
@@ -58,7 +58,7 @@ public interface UserToken
     /* This method returns the key List embedded in the token 
        This method will be used when the user needs to upload/download file
     */
-    public List<SecretKey> getKeys();
+    public ArrayList<SecretKey> getKeys();
 
     /* This method returns the encrypted time when the token is created
        This method will be used when the user needs to communicate with the file server

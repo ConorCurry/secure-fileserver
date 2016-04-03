@@ -117,17 +117,20 @@ import org.bouncycastle.jce.provider.*;
 			owners = new ArrayList<String>();
 			members = new ArrayList<String>();
 			file_keys = new ArrayList<SecretKey>();
+			Security.addProvider(new BouncyCastleProvider());
 
 			//create a new key to put into the file_keys list when a group is created 
 			try
 			{
-				KeyGenerator key = KeyGenerator.getInstance("AES", "BC");
+				KeyGenerator key = KeyGenerator.getInstance("AES/CTR/NoPadding", "BC");
 		        key.init(256, new SecureRandom());
 		        file_keys.add(key.generateKey());
+		        System.out.println("Key Generated");
 		    }
 		    catch(Exception e)
 		    {
 		    	System.out.println("Fail to create a key when the group is created.");
+		    	System.err.println("Error: " + e.getMessage());
 		    }
 		}
 
@@ -170,7 +173,7 @@ import org.bouncycastle.jce.provider.*;
 			//create a new key to put into the file_keys list when a member is deleted
 			try
 			{
-				KeyGenerator key = KeyGenerator.getInstance("AES", "BC");
+				KeyGenerator key = KeyGenerator.getInstance("AES/CTR/NoPadding", "BC");
 		        key.init(256, new SecureRandom());
 		        file_keys.add(key.generateKey());
 		    }

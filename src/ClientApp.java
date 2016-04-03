@@ -618,7 +618,6 @@ public class ClientApp
                     if(fs_pubKeys == null)
                         fs_pubKeys = new Hashtable<String, PublicKey>();
 
-                    System.out.println(fs_name + fs_port);
                     fs_pubKeys.put(fs_name + fs_port, fsPubKey);
                     //write server's public key to a file 
                     try
@@ -705,13 +704,38 @@ public class ClientApp
                 String src = input.nextLine();
                 System.out.print("Please enter your destination file path: ");
                 String dest = input.nextLine();
-                success = fileClient.download(src, dest, FCToken);
-                if(success) {
-                    System.out.println("Download successful!");
-                } else {
-                    System.out.print("Download unsuccessful, try again? (y/n): ");
-                    if(input.nextLine().equals("n")) {
-                        break;
+                boolean proceed = true;
+                if(EDToken == null)
+                {
+                    EDToken = groupClient.getToken_fileOperation(username, new ArrayList<String>(token.getGroups()));
+                    if(EDToken == null)
+                    {
+                        proceed = false;
+                    }
+                }
+                else
+                {
+                            //check time-out if time-out request again
+                }
+                if(proceed)
+                {
+                    
+                    boolean stayinGroups = groupsCheck();
+                    if(stayinGroups)
+                    {
+                        String grp = selectGroup();
+                        if(!grp.equals(""))
+                        {
+                            success = fileClient.download(src, dest, grp, FCToken, EDToken.getKeys());
+                            if(success) {
+                                System.out.println("Download successful!");
+                            } else {
+                                System.out.print("Download unsuccessful, try again? (y/n): ");
+                                if(input.nextLine().equals("n")) {
+                                    break;
+                                }
+                            }
+                        }
                     }
                 }
             } while(!success);
@@ -739,15 +763,35 @@ public class ClientApp
                 if(stayinGroups)
                 {
                     String grp = selectGroup();
+                    boolean proceed = true;
                     if(!grp.equals(""))
                     {
-        				success = fileClient.upload(src, dest, grp, FCToken);
-                        if(success) {
-        					System.out.println("Upload successful!");
-                        } else {
-        					System.out.print("Upload unsuccessful, try again? (y/n): ");
-        					if(input.nextLine().equals("n")) {
-        						break;
+        				if(EDToken == null)
+                        {
+                            //request token from the group server
+                            ArrayList<String> working_group = new ArrayList<String>();
+                            working_group.add(grp);
+                            EDToken = groupClient.getToken_fileOperation(username, working_group);
+                            if(EDToken == null)
+                            {
+                                proceed = false;
+                            }
+                        }
+                        else
+                        {
+                            //check time-out if time-out request again
+                        }
+                        if(proceed)
+                        {
+                            System.out.println(DatatypeConverter.printBase64Binary(EDToken.getKeys().get(0).getEncoded()));
+                            success = fileClient.upload(src, dest, grp, FCToken, EDToken.getKeys());
+                            if(success) {
+                                System.out.println("Upload successful!");
+                            }else {
+                                System.out.print("Upload unsuccessful, try again? (y/n): ");
+                                if(input.nextLine().equals("n")) {
+                                    break;
+                                }
                             }
                         }
                     }
