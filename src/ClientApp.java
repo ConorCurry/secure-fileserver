@@ -783,7 +783,6 @@ public class ClientApp
                         }
                         if(proceed)
                         {
-                            System.out.println(DatatypeConverter.printBase64Binary(EDToken.getKeys().get(0).getEncoded()));
                             success = fileClient.upload(src, dest, grp, FCToken, EDToken.getKeys());
                             if(success) {
                                 System.out.println("Upload successful!");

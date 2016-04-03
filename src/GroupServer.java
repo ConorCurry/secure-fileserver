@@ -154,12 +154,15 @@ public class GroupServer extends Server {
 	            sPrivKOutStream.writeObject(server_priv_salt);
 	            sPrivKOutStream.close();
 
-
+				
+				KeyGenerator ed_key = KeyGenerator.getInstance("AES", "BC");
+				ed_key.init(256, new SecureRandom()); //128-bit AES key
+		
 				//Create a new list, add current user to the ADMIN group. They now own the ADMIN group.
 				userList = new UserList();
 				groupList = new GroupList();
 				userList.addUser(username, kp.getPublic());
-				groupList.addGroup("ADMIN", username);
+				groupList.addGroup("ADMIN", username, ed_key.generateKey());
 	            groupList.addMember(username, "ADMIN");
 				userList.addGroup(username, "ADMIN");
 				userList.addOwnership(username, "ADMIN");

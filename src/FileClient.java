@@ -13,7 +13,7 @@ public class FileClient extends Client implements FileClientInterface {
 
 	private static final String RSA_METHOD = "RSA/NONE/OAEPWithSHA256AndMGF1Padding";
 	private static final String SYM_METHOD = "AES/CBC/PKCS5Padding";
-	SecretKey symKey;
+	private static SecretKey symKey;
 
 	public PublicKey getFSkey()
 	{
@@ -151,18 +151,15 @@ public class FileClient extends Client implements FileClientInterface {
 					    env.addObject(token);
 					    output.writeObject(env.encrypted(symKey)); 
 						
-						Cipher cipher = Cipher.getInstance("AES/CBC/NoPadding", "BC");
+						Cipher cipher = Cipher.getInstance("AES/CTR/NoPadding", "BC");
 			 			SecretKey decrypt_key = key_list.get(key_list.size() - 1);
-			 			System.out.println(DatatypeConverter.printBase64Binary(decrypt_key.getEncoded()));
 			 			byte[] IVarray = Arrays.copyOf(convertToBytes(group), 16);
-			 			System.out.println(new String(IVarray));
 
 					    env = (Envelope)((SealedObject)input.readObject()).getObject(symKey);
 					    
 						while (env.getMessage().compareTo("CHUNK")==0) { 
 								cipher.init(Cipher.DECRYPT_MODE, decrypt_key, new IvParameterSpec(IVarray));
 								byte[] decrypted_data = cipher.doFinal((byte[])env.getObjContents().get(0));
-								System.out.println(new String(decrypted_data));
 								fos.write(decrypted_data, 0, (Integer)env.getObjContents().get(1));
 								System.out.printf(".");
 								env = new Envelope("DOWNLOADF"); //Success
@@ -183,7 +180,6 @@ public class FileClient extends Client implements FileClientInterface {
 								return false;								
 						}
 				    }    
-					 
 				    else {
 						System.out.printf("Error couldn't create file %s\n", destFile);
 						return false;
@@ -193,6 +189,8 @@ public class FileClient extends Client implements FileClientInterface {
 			    } catch (IOException e1) {
 			    	
 			    	System.out.printf("Error couldn't create file %s\n", destFile);
+			    	System.out.println(e1.getMessage());
+			    	e1.printStackTrace();
 			    	return false;
 			    
 					
@@ -275,14 +273,12 @@ public class FileClient extends Client implements FileClientInterface {
 				 return false;
 			 }
 
-			 Cipher cipher = Cipher.getInstance("AES/CBC/NoPadding", "BC");
+			 Cipher cipher = Cipher.getInstance("AES/CTR/NoPadding", "BC");
 			 SecretKey encrypt_key = key_list.get(key_list.size() - 1);
-			 System.out.println(DatatypeConverter.printBase64Binary(encrypt_key.getEncoded()));
 			 byte[] IVarray = Arrays.copyOf(convertToBytes(group), 16);
-		 	 System.out.println(new String(IVarray));
 			 
 			 do {
-				 byte[] buf = new byte[4096];
+				 	byte[] buf = new byte[4096];
 				 	if (env.getMessage().compareTo("READY")!=0) {
 				 		System.out.printf("Server error: %s\n", env.getMessage());
 				 		return false;
@@ -295,12 +291,10 @@ public class FileClient extends Client implements FileClientInterface {
 						System.out.println("Read error");
 						return false;
 					}
-					System.out.println(new String(buf));
 					//encrypt buf first 
 					cipher.init(Cipher.ENCRYPT_MODE, encrypt_key, new IvParameterSpec(IVarray));
 					byte[] encrypted_data = cipher.doFinal(buf);
-					System.out.println(n + " "+ encrypted_data.length);
-					message.addObject(cipher.doFinal(buf));
+					message.addObject(encrypted_data);
 					message.addObject(new Integer(n));
 					
 					output.writeObject(message.encrypted(symKey));
@@ -341,6 +335,7 @@ public class FileClient extends Client implements FileClientInterface {
 				}
 		 return true;
 	}
+
 	private byte[] convertToBytes(Object object){
  		try{ 
     	   	ByteArrayOutputStream bos = new ByteArrayOutputStream();
