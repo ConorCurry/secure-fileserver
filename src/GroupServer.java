@@ -13,8 +13,7 @@ import javax.crypto.*;
 import java.security.*;
 import javax.crypto.spec.SecretKeySpec;
 import javax.crypto.spec.IvParameterSpec;
-import java.net.InetAddress;
-import java.net.UnknownHostException;
+
 
 public class GroupServer extends Server {
 
@@ -42,18 +41,7 @@ public class GroupServer extends Server {
 		//This runs a thread that saves the lists on program exit
 		Runtime runtime = Runtime.getRuntime();
 		runtime.addShutdownHook(new ShutDownListener(this));
-		String hostname;
-        try {
-           	InetAddress ip = InetAddress.getLocalHost();
-           	hostname = ip.getCanonicalHostName();
-          	//hostname = ServletRequest.getServerName;
-            System.out.println("Your current IP address : " + ip);
-            System.out.println("Your current Hostname : " + hostname);
- 
-        } catch (UnknownHostException e) {
- 
-            e.printStackTrace();
-        }
+
 		//Open user file to get user list
 		try
 		{

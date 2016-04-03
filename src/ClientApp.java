@@ -569,6 +569,20 @@ public class ClientApp
             fs_port = input.nextInt();
             input.nextLine();
             boolean getKey = true;
+            String ct = "";
+            
+            if(fs_port == 0)
+            {
+                fs_port = FS_PORT;
+            }
+
+            if(!fileClient.connect(fs_name, fs_port)) {
+                        fs_name = null;
+                        fs_port = 0;
+            }
+
+            PublicKey fsPubKey = null;
+            
             //look into file server's public key
             Hashtable<String, PublicKey> fs_pubKeys = null;
             try
@@ -576,10 +590,13 @@ public class ClientApp
                 FileInputStream fis = new FileInputStream("FSPublicKey_client.bin");
                 ObjectInputStream fileStream = new ObjectInputStream(fis);
                 fs_pubKeys = (Hashtable<String, PublicKey>)fileStream.readObject();
+                System.out.println(fs_name + fs_port);
                 if(fs_pubKeys.containsKey(fs_name + fs_port))
                 {
                     //go to group server to request token to connect to the file server 
+                    System.out.println("Got keys");
                     getKey = false;
+                    ct = "y";
                 }
             }
             catch(Exception e)
@@ -588,18 +605,9 @@ public class ClientApp
                 //request public key 
                 //do nothing here 
             }
-            if(fs_port == 0)
-            {
-                    fs_port = FS_PORT;
-            }
-            if(!fileClient.connect(fs_name, fs_port)) {
-                        fs_name = null;
-                        fs_port = 0;
-            }
-            PublicKey fsPubKey = null;
+
             if(getKey)
             {
-                
                 fsPubKey = fileClient.getFSkey();
                 if(fsPubKey == null)
                 {
@@ -609,7 +617,8 @@ public class ClientApp
                 {
                     if(fs_pubKeys == null)
                         fs_pubKeys = new Hashtable<String, PublicKey>();
-                    
+
+                    System.out.println(fs_name + fs_port);
                     fs_pubKeys.put(fs_name + fs_port, fsPubKey);
                     //write server's public key to a file 
                     try
@@ -617,17 +626,18 @@ public class ClientApp
                         ObjectOutputStream sPubKOutStream = new ObjectOutputStream(new FileOutputStream("FSPublicKey_client.bin"));
                         sPubKOutStream.writeObject(fs_pubKeys);
                         sPubKOutStream.close();
+                         //print public key out for user to verify 
+                        System.out.println("RSA Key is: " + DatatypeConverter.printBase64Binary(fsPubKey.getEncoded()));
+                        System.out.println("Do you want to continue? y/n");
+                        ct = input.nextLine();
                     }
                     catch(Exception e)
                     {
-
+                        System.out.println("Fail to write it back");
                     }
                 }
             }
-            //print public key out for user to verify 
-            System.out.println("RSA Key is: " + DatatypeConverter.printBase64Binary(fsPubKey.getEncoded()));
-            System.out.println("Do you want to continue? y/n");
-            String ct = input.nextLine();
+
             if(ct.equalsIgnoreCase("y"))
             {
         		System.out.print("Authenticating FileServer...");
@@ -641,7 +651,8 @@ public class ClientApp
             else
             {
                 System.out.println("Connection between the file server and client is closing. You can choose to connect another file server later.");
-                fileClient.disconnect();
+                if(fileClient.isConnected())
+                    fileClient.disconnect();
             }
         }
         System.out.println("Returning to main menu...");
