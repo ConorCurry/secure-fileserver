@@ -1015,7 +1015,17 @@ public class GroupThread extends Thread
 					//If user is the owner, removeMember will automatically delete group!
 					for(int index = 0; index < deleteFromGroups.size(); index++)
 					{
-						my_gs.groupList.removeMember(username, deleteFromGroups.get(index));
+						try
+						{
+							KeyGenerator key = KeyGenerator.getInstance("AES", "BC");
+							key.init(256, new SecureRandom()); //128-bit AES key
+							my_gs.groupList.removeMember(username, deleteFromGroups.get(index), key.generateKey());
+						}
+						catch(Exception e)
+						{
+							System.out.println("Can't create a new key when a user is deleted");
+							return false;
+						}
 					}
 					
 					//If groups are owned BY ONLY THIS USER, they must be deleted
@@ -1065,21 +1075,34 @@ public class GroupThread extends Thread
 		//Check if requester exists
 		if(my_gs.userList.checkUser(requester))
 		{
-			//Does user already exist?
-			if(my_gs.groupList.checkGroup(groupname))
+			try
 			{
-				return false; //Group already exists
-			}
-			else if(my_gs.groupList.addGroup(groupname, requester)) //if group is successfully added
-			{
-			    //this method handles group creation with an owner
-			    //also put the user as a group member
-				my_gs.groupList.addMember(requester, groupname);
-				my_gs.userList.addOwnership(requester, groupname);
-				my_gs.userList.addGroup(requester, groupname);
-				return true;
+				KeyGenerator key = KeyGenerator.getInstance("AES", "BC");
+				key.init(256, new SecureRandom()); //128-bit AES key
+		
+				//Does user already exist?
+				if(my_gs.groupList.checkGroup(groupname))
+				{
+					return false; //Group already exists
+				}
+				else if(my_gs.groupList.addGroup(groupname, requester, key.generateKey())) //if group is successfully added
+				{
+				    //this method handles group creation with an owner
+				    //also put the user as a group member
+					my_gs.groupList.addMember(requester, groupname);
+					my_gs.userList.addOwnership(requester, groupname);
+					my_gs.userList.addGroup(requester, groupname);
+					return true;
 
-			} else {
+				} 
+				else 
+				{
+					return false;
+				}
+			}
+			catch (Exception e)
+			{
+				System.out.println("Fail to generate the first key for the group newly created");
 				return false;
 			}
 		}
@@ -1211,9 +1234,22 @@ public class GroupThread extends Thread
 				{
 					if(my_gs.userList.getUserGroups(user).contains(group))
 					{
-						my_gs.userList.removeGroup(user, group);
-                        my_gs.groupList.removeMember(user, group);
-						return true; //remove this successfully
+						
+						try
+						{
+							KeyGenerator key = KeyGenerator.getInstance("AES", "BC");
+							key.init(256, new SecureRandom()); //128-bit AES key
+		
+
+							my_gs.userList.removeGroup(user, group);
+		                    my_gs.groupList.removeMember(user, group, key.generateKey());
+							return true; //remove this successfully
+						}
+						catch (Exception e)
+						{
+							System.out.println("Can't create a new key when a user is deleted from the group.");
+							return false;
+						}
 					}
 					else
 					{
