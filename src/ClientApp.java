@@ -6,6 +6,7 @@ import java.security.*;
 import javax.crypto.spec.SecretKeySpec;
 import java.security.spec.PKCS8EncodedKeySpec;
 import javax.crypto.spec.IvParameterSpec;
+import javax.xml.bind.DatatypeConverter;
 
 public class ClientApp
 {
@@ -13,6 +14,8 @@ public class ClientApp
     private static FileClient fileClient;
     private static Scanner input;
     private static UserToken masterToken;
+    private static UserToken FCToken; //used to communicate with file server
+    private static UserToken EDToken; //used to encrypt/decrypt file locally 
     private static int choice;
     private static String username;
     private static String gs_name, fs_name;
@@ -25,6 +28,7 @@ public class ClientApp
     private static final String AES_Method = "AES/CBC/PKCS5Padding";
     private static PublicKey pubKey = null;
     private static PrivateKey privKey = null;
+    private static boolean fs_authentication = false;
     
     public static void main(String[] args) throws Exception
     {
@@ -215,7 +219,7 @@ public class ClientApp
             System.out.println("8. List members of a group");
             System.out.println("9. List the groups you belong to");
             System.out.println("10. Change the group you would like to work on");
-            if(fileClient.isConnected()) {
+            if(fileClient.isConnected() && fs_authentication) {
                 System.out.println("11. Delete file");
                 System.out.println("12. Download file");
                 System.out.println("13. Upload file");
@@ -564,20 +568,81 @@ public class ClientApp
             System.out.print("Please enter the port number you would like to connect on (0 for default): ");
             fs_port = input.nextInt();
             input.nextLine();
+            boolean getKey = true;
+            //look into file server's public key
+            Hashtable<String, PublicKey> fs_pubKeys = null;
+            try
+            {
+                FileInputStream fis = new FileInputStream("FSPublicKey_client.bin");
+                ObjectInputStream fileStream = new ObjectInputStream(fis);
+                fs_pubKeys = (Hashtable<String, PublicKey>)fileStream.readObject();
+                if(fs_pubKeys.containsKey(fs_name + fs_port))
+                {
+                    //go to group server to request token to connect to the file server 
+                    getKey = false;
+                }
+            }
+            catch(Exception e)
+            {
+                //create a file contains file server public keys
+                //request public key 
+                //do nothing here 
+            }
             if(fs_port == 0)
             {
-                fs_port = FS_PORT;
+                    fs_port = FS_PORT;
             }
             if(!fileClient.connect(fs_name, fs_port)) {
-                fs_name = null;
-                fs_port = 0;
+                        fs_name = null;
+                        fs_port = 0;
             }
-			System.out.print("Authenticating FileServer...");
-			if(!fileClient.authenticate(token, pubKey, privKey)) {
-				System.out.println("Authentication Failed!");
-			} else {
-				System.out.println("Successfully Authenticated!");
-			}
+            PublicKey fsPubKey = null;
+            if(getKey)
+            {
+                
+                fsPubKey = fileClient.getFSkey();
+                if(fsPubKey == null)
+                {
+                    System.out.println("Fail to get File Server's publc key.");
+                }
+                else
+                {
+                    if(fs_pubKeys == null)
+                        fs_pubKeys = new Hashtable<String, PublicKey>();
+                    
+                    fs_pubKeys.put(fs_name + fs_port, fsPubKey);
+                    //write server's public key to a file 
+                    try
+                    {
+                        ObjectOutputStream sPubKOutStream = new ObjectOutputStream(new FileOutputStream("FSPublicKey_client.bin"));
+                        sPubKOutStream.writeObject(fs_pubKeys);
+                        sPubKOutStream.close();
+                    }
+                    catch(Exception e)
+                    {
+
+                    }
+                }
+            }
+            //print public key out for user to verify 
+            System.out.println("RSA Key is: " + DatatypeConverter.printBase64Binary(fsPubKey.getEncoded()));
+            System.out.println("Do you want to continue? y/n");
+            String ct = input.nextLine();
+            if(ct.equalsIgnoreCase("y"))
+            {
+        		System.out.print("Authenticating FileServer...");
+        		if(!fileClient.authenticate(token, pubKey, privKey, fsPubKey)) {
+        			System.out.println("Authentication Failed!");
+        		} else {
+        			System.out.println("Successfully Authenticated!");
+                    fs_authentication = true;
+        		}
+            }
+            else
+            {
+                System.out.println("Connection between the file server and client is closing. You can choose to connect another file server later.");
+                fileClient.disconnect();
+            }
         }
         System.out.println("Returning to main menu...");
     }

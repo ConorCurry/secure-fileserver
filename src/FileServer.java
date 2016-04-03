@@ -7,8 +7,7 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
-import java.net.ServerSocket;
-import java.net.Socket;
+import java.net.*;
 import org.bouncycastle.jce.provider.*;
 import java.security.*;
 import javax.crypto.*;
@@ -16,6 +15,8 @@ import java.util.Scanner;
 import java.util.ArrayList;
 import javax.crypto.spec.SecretKeySpec;
 import javax.crypto.spec.IvParameterSpec;
+
+import java.util.Hashtable;
 
 public class FileServer extends Server {
 	
@@ -43,6 +44,7 @@ public class FileServer extends Server {
 		Thread catchExit = new Thread(new ShutDownListenerFS());
 		runtime.addShutdownHook(catchExit);
 		Scanner console = new Scanner(System.in);
+
 		//Filelist management
 		try
 		{
@@ -67,6 +69,7 @@ public class FileServer extends Server {
 	            kpgn.initialize(3072, new SecureRandom());
 	            KeyPair kpn = kpgn.genKeyPair();
 
+	            //create list to store public key
 	            ArrayList<PublicKey> server_pub = new ArrayList<PublicKey>();
 	            server_pub.add(kpn.getPublic());
 	            //write server's public key to a file 

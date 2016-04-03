@@ -19,9 +19,28 @@ public class FileClient extends Client implements FileClientInterface {
 	private static final String SYM_METHOD = "AES/CBC/PKCS5Padding";
 	SecretKey symKey;
 
-	public boolean authenticate(UserToken token, PublicKey usrPubKey, PrivateKey usrPrivKey) {
+	public PublicKey getFSkey()
+	{
+		try
+		{
+			Envelope message = new Envelope("GetPubKey");
+			output.writeObject(message);
+
+			Envelope response = (Envelope)input.readObject();
+			if(response.getMessage().equals("OK"))
+				return (PublicKey)response.getObjContents().get(0);
+			else
+				return null;
+		}
+		catch(Exception e)
+		{
+			System.err.println("Error getting PublicKey: " + e);
+			return null;
+		}
+	}
+
+	public boolean authenticate(UserToken token, PublicKey usrPubKey, PrivateKey usrPrivKey, PublicKey serverKey) {
 		KeyPairGenerator keyPairGen = null;
-		PublicKey serverKey = null;
 		Cipher cipher = null;
 		SecureRandom srng = new SecureRandom();
 		//64-bit random challenge
@@ -29,20 +48,6 @@ public class FileClient extends Client implements FileClientInterface {
 		byte[] challenge = new byte[8];
 		symKey = null;
 		srng.nextBytes(rand);
-
-		try
-		{
-			FileInputStream kfis = new FileInputStream("FileServerPublicKey.bin");
-	        ObjectInputStream serverKeysStream = new ObjectInputStream(kfis);
-	        serverKey = ((ArrayList<PublicKey>)serverKeysStream.readObject()).get(0);
-	        kfis.close();
-	        serverKeysStream.close();
-    	}
-    	catch(Exception ex)
-    	{
-    		System.err.println("Fail to load server's public key" + ex);
-			return false;
-    	}
 
 		//STAGE1 -- Initialize connecction, prepare challenge
 		Envelope auth = new Envelope("AUTH");

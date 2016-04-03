@@ -1,9 +1,10 @@
 /* File worker thread handles the business of uploading, downloading, and removing files for clients with valid tokens */
 
 import java.lang.Thread;
-import java.net.Socket;
+import java.net.*;
 import java.util.List;
 import java.util.ArrayList;
+import java.util.Hashtable;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
@@ -37,31 +38,82 @@ public class FileThread extends Thread
 		boolean proceed = true;
 		try
 		{
-			System.out.println("*** New connection from " + socket.getInetAddress() + ":" + socket.getPort() + "***");
+			System.out.println("*** New connection from " + socket.getInetAddress() + " : " + socket.getPort() + "***");
 			input = new ObjectInputStream(socket.getInputStream());
 			output = new ObjectOutputStream(socket.getOutputStream());
-			SecretKey symKey;
-		    
-			if ((symKey = authenticate()) == null) {
-				socket.close();
-				proceed = false;
-				System.out.println("Auth failed, closing connection.");
+			SecretKey symKey = null;
+		    Envelope msg = (Envelope)input.readObject();
+		    boolean authOrNot = false;
+		    if(msg.getMessage().equals("GetPubKey"))
+		    {
+		    	Envelope rsp = null;
+		    	//load group server's public key 
+				try
+				{
+					//read in server's public key from the file storing server's public key 
+		            FileInputStream kfisp = new FileInputStream("FileServerPublicKey.bin");
+		            ObjectInputStream fileServerKeysStream = new ObjectInputStream(kfisp);
+		            rsp = new Envelope("OK");
+		            rsp.addObject(((ArrayList<PublicKey>)fileServerKeysStream.readObject()).get(0));
+		            kfisp.close();
+		            fileServerKeysStream.close();
+		            authOrNot = true;
+				}
+				catch(Exception ex)
+				{
+					System.out.println("Fail to load public key" + ex);
+					socket.close();
+					System.out.println("Socket close");
+					proceed = false;
+					rsp = new Envelope("FAIL");
+				}
+				output.writeObject(rsp);
+		    }
+		    if(proceed)
+		    {
+			    if(authOrNot)
+			    {	
+				    if ((symKey = authenticate()) == null) {
+							socket.close();
+							proceed = false;
+							System.out.println("Auth failed, closing connection.");
+					}
+				}
+				else
+				{
+					 if ((symKey = authenticate(msg)) == null) {
+							socket.close();
+							proceed = false;
+							System.out.println("Auth failed, closing connection.");
+					}
+				}
 			}
+
 			Envelope response;
 			
 			//load group server's public key 
 			try
 			{
 				//read in server's public key from the file storing server's public key 
-	            FileInputStream kfis = new FileInputStream("ServerPublic.bin");
-	            ObjectInputStream serverKeysStream = new ObjectInputStream(kfis);
-	            groupkey = ((ArrayList<PublicKey>)serverKeysStream.readObject()).get(0);
-	            kfis.close();
-	            serverKeysStream.close();
+		        FileInputStream kfis = new FileInputStream("ServerPublic.bin");
+		        ObjectInputStream serverKeysStream = new ObjectInputStream(kfis);
+		        groupkey = ((ArrayList<PublicKey>)serverKeysStream.readObject()).get(0);
+		        kfis.close();
+		        serverKeysStream.close();
 			}
 			catch(Exception ex)
 			{
 				System.out.println("Fail to load public key" + ex);
+				try
+				{
+					socket.close();
+					System.out.println("connection is closed.");
+					proceed = false;
+				}
+				catch(Exception exx)
+				{
+					System.out.println("Fail to close the file server.");
+				}
 			}
 
 		   	while (proceed)
@@ -346,6 +398,91 @@ public class FileThread extends Thread
 			System.err.println("Unable to recieve object: " +  e);
 			return null;
 		}
+		if (challenge == null || !challenge.getMessage().equals("AUTH") || challenge.getObjContents().size() != 2) {
+			return null;
+		}
+		
+		//Stage0 -- load private key
+		try {	
+			//generate the secret key to decrypt the private key 
+			MessageDigest messageDigest = MessageDigest.getInstance("SHA-256");
+			messageDigest.update((FileServer.password).getBytes());
+			byte[] hashedPassword = messageDigest.digest();
+
+			//read in encrypted private key 
+			FileInputStream fis = new FileInputStream("FileServerPrivateKey.bin");
+			ObjectInputStream keyStream = new ObjectInputStream(fis);   
+			ArrayList<byte[]> server_priv_byte = (ArrayList<byte[]>)keyStream.readObject();
+			keyStream.close();
+			fis.close();
+
+			byte[] key_data = server_priv_byte.get(0);
+			byte[] salt = server_priv_byte.get(1);
+			
+			//decrypt the one read from the file to get the server's private key 
+			Cipher cipher_privKey = Cipher.getInstance(SYM_METHOD, "BC");
+			//create a shared key with the user's hashed password 
+			SecretKeySpec skey = new SecretKeySpec(hashedPassword, "AES");
+
+			IvParameterSpec ivSpec = new IvParameterSpec(salt);
+			cipher_privKey.init(Cipher.DECRYPT_MODE, skey, ivSpec);
+			byte[] decrypted_data = cipher_privKey.doFinal(key_data);
+			
+			//recover the private key from the decrypted byte array 
+			KeyFactory kf = KeyFactory.getInstance("RSA", "BC");
+			serverKey = kf.generatePrivate(new PKCS8EncodedKeySpec(decrypted_data));
+
+		} catch (Exception e) {
+			System.err.println("Unable to load private key: " + e);
+			return null;
+		}
+		//Stage1 -- handle receiving initial auth request
+		try {
+			cipher = Cipher.getInstance(RSA_METHOD, "BC");
+			cipher.init(Cipher.DECRYPT_MODE, serverKey);
+			rand = cipher.doFinal( (byte[])challenge.getObjContents().get(0) );
+			userKey = (PublicKey)challenge.getObjContents().get(1);
+		} catch (Exception ex) {
+			System.err.println("Err in handling auth request part 1: " + ex);
+			return null;
+		}
+		try {
+			//generate AES256 key
+			keyGen = KeyGenerator.getInstance("AES", "BC");
+			keyGen.init(256, new SecureRandom());
+			AESKey = keyGen.generateKey();
+		} catch (Exception ex) {
+			System.err.println("Error in handling auth request (RSA): " + ex);
+			return null;
+		}
+
+		//Stage2 -- Auth response
+		Envelope response = new Envelope("AUTH");
+		try {
+			MessageDigest messageDigest = MessageDigest.getInstance("SHA-256");
+			messageDigest.update(rand);
+			cipher.init(Cipher.ENCRYPT_MODE, userKey);
+			ByteArrayOutputStream msg = new ByteArrayOutputStream();
+			msg.write(messageDigest.digest());
+			msg.write(AESKey.getEncoded());
+			response.addObject(cipher.doFinal(msg.toByteArray()));
+			output.writeObject(response);
+		} catch (Exception ex) {
+			System.err.println("Error in encrypting/hashing auth response (RSA/SHA-256): " + ex);
+			return null;
+		}
+		System.out.println("Authentication complete, success!");
+		return AESKey; //auth steps complete		
+	}
+
+	private SecretKey authenticate(Envelope challenge) {
+		SecretKey AESKey = null;
+		Cipher cipher = null;
+		PrivateKey serverKey = null;
+		PublicKey userKey = null;
+		byte[] rand;
+		KeyGenerator keyGen = null;
+		
 		if (challenge == null || !challenge.getMessage().equals("AUTH") || challenge.getObjContents().size() != 2) {
 			return null;
 		}
