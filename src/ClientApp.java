@@ -594,7 +594,7 @@ public class ClientApp
                 if(fs_pubKeys.containsKey(fs_name + fs_port))
                 {
                     //go to group server to request token to connect to the file server 
-                    System.out.println("Got keys");
+                    fsPubKey = fs_pubKeys.get(fs_name + fs_port);
                     getKey = false;
                     ct = "y";
                 }
@@ -640,13 +640,18 @@ public class ClientApp
 
             if(ct.equalsIgnoreCase("y"))
             {
-        		System.out.print("Authenticating FileServer...");
-        		if(!fileClient.authenticate(token, pubKey, privKey, fsPubKey)) {
-        			System.out.println("Authentication Failed!");
-        		} else {
-        			System.out.println("Successfully Authenticated!");
-                    fs_authentication = true;
-        		}
+        		System.out.println("Requesting a new Token from GroupServer to Connect the FileServer...");
+                FCToken = groupClient.getToken_connectToFileServer(username, new ArrayList<String>(token.getGroups()), fsPubKey);
+                if(FCToken != null)
+                {
+                    System.out.print("Authenticating FileServer...");
+            		if(!fileClient.authenticate(FCToken, pubKey, privKey, fsPubKey)) {
+            			System.out.println("Authentication Failed!");
+            		} else {
+            			System.out.println("Successfully Authenticated!");
+                        fs_authentication = true;
+            		}
+                }
             }
             else
             {
@@ -671,7 +676,7 @@ public class ClientApp
             do {
                 System.out.print("Please enter the path of the file you want to delete: ");
                 String path = input.nextLine();
-                success = fileClient.delete(path, token);
+                success = fileClient.delete(path, FCToken);
                 if(success) {
                     System.out.printf("Successfully deleted %s\n", path);
                 } else {
@@ -700,7 +705,7 @@ public class ClientApp
                 String src = input.nextLine();
                 System.out.print("Please enter your destination file path: ");
                 String dest = input.nextLine();
-                success = fileClient.download(src, dest, token);
+                success = fileClient.download(src, dest, FCToken);
                 if(success) {
                     System.out.println("Download successful!");
                 } else {
@@ -736,7 +741,7 @@ public class ClientApp
                     String grp = selectGroup();
                     if(!grp.equals(""))
                     {
-        				success = fileClient.upload(src, dest, grp, token);
+        				success = fileClient.upload(src, dest, grp, FCToken);
                         if(success) {
         					System.out.println("Upload successful!");
                         } else {
@@ -765,7 +770,7 @@ public class ClientApp
         }
         if(choice == 1)
         {
-            ArrayList<String> allFiles = (ArrayList<String>)fileClient.listFiles(token);
+            ArrayList<String> allFiles = (ArrayList<String>)fileClient.listFiles(FCToken);
             if(allFiles == null || allFiles.isEmpty()) {
                 System.out.println("Sorry, You did not have any file now\n");
 				
