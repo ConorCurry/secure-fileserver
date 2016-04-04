@@ -651,6 +651,12 @@ public class ClientApp
                         fs_authentication = true;
             		}
                 }
+                else
+                {
+                    System.out.println("Fail to get an valid token to communicate with the file server");
+                    if(fileClient.isConnected())
+                        fileClient.disconnect();
+                }
             }
             else
             {
