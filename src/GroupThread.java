@@ -94,187 +94,222 @@ public class GroupThread extends Thread
 			final ObjectOutputStream output = new ObjectOutputStream(socket.getOutputStream());
 			
 			Envelope first_message = (Envelope)input.readObject();
+			System.out.println("receive message from client");
 			Envelope response_a = null; //the response for authentication 
-			//have to do the authentication first 
-			if(first_message.getMessage().equals("CHALLENGE"))
-			{
-					//get objects in the message 
-					ArrayList<Object> temp = first_message.getObjContents();
-					byte[] rndBytes = null;
-					//first username, second-encrypted number, third- encrypted AES key, forth signed AES key
-					if(temp != null && temp.size() == 4)
-					{
-						//decrypt the sealed object with server's private key 
-						Cipher dec = Cipher.getInstance(RSA_Method, "BC");
-						dec.init(Cipher.DECRYPT_MODE, privKey);
-						
-						String username = (String)temp.get(0);
+			boolean authOrNot = true;
+		    if(first_message.getMessage().equals("GetPubKey"))
+		    {
+		    	Envelope rsp = null;
+		    	//load group server's public key 
+				try
+				{
+					//read in server's public key from the file storing server's public key 
+		            FileInputStream kfisp = new FileInputStream("ServerPublic.bin");
+		            ObjectInputStream fileServerKeysStream = new ObjectInputStream(kfisp);
+		            rsp = new Envelope("OK");
+		            rsp.addObject(((ArrayList<PublicKey>)fileServerKeysStream.readObject()).get(0));
+		            kfisp.close();
+		            fileServerKeysStream.close();
+		            authOrNot = false;
+				}
+				catch(Exception ex)
+				{
+					System.out.println("Fail to load public key" + ex);
+					socket.close();
+					System.out.println("Socket close");
+					proceed = false;
+					rsp = new Envelope("FAIL");
+				}
+				output.writeObject(rsp);
+		    }
 
-						//if user exists 
-						if(my_gs.userList.checkUser(username))
+		    if(proceed)
+		    {
+				if(!authOrNot)
+				{
+					first_message = (Envelope)input.readObject();
+				}
+
+				if(first_message.getMessage().equals("CHALLENGE"))
+				{
+						//get objects in the message 
+						ArrayList<Object> temp = first_message.getObjContents();
+						byte[] rndBytes = null;
+						//first username, second-encrypted number, third- encrypted AES key, forth signed AES key
+						if(temp != null && temp.size() == 4)
 						{
-							PublicKey usrPubKey = my_gs.userList.getUserPublicKey(username);
+							//decrypt the sealed object with server's private key 
+							Cipher dec = Cipher.getInstance(RSA_Method, "BC");
+							dec.init(Cipher.DECRYPT_MODE, privKey);
+							
+							String username = (String)temp.get(0);
+
+							//if user exists 
+							if(my_gs.userList.checkUser(username))
+							{
+								PublicKey usrPubKey = my_gs.userList.getUserPublicKey(username);
+							
+								Signature sig = Signature.getInstance("SHA256withRSA", "BC");
+								sig.initVerify(usrPubKey);
+						    	//update original data to be verified and verify the data
+						    	sig.update((byte[])temp.get(2));
+						    	byte[] to_be_verified = (byte[])temp.get(3);
+						    	boolean verified = sig.verify(to_be_verified);
 						
-							Signature sig = Signature.getInstance("SHA256withRSA", "BC");
-							sig.initVerify(usrPubKey);
-					    	//update original data to be verified and verify the data
-					    	sig.update((byte[])temp.get(2));
-					    	byte[] to_be_verified = (byte[])temp.get(3);
-					    	boolean verified = sig.verify(to_be_verified);
-					
-							//if matches, decrypts to get the AES key, generate a new number and encrypt that with user's public key 
-					    	if(verified)
-					    	{
+								//if matches, decrypts to get the AES key, generate a new number and encrypt that with user's public key 
+						    	if(verified)
+						    	{
 
-									response_a = new Envelope("OK");
+										response_a = new Envelope("OK");
 
-									//Get the user generated number and add its hashed value to message 
-									Cipher rcipher = Cipher.getInstance(RSA_Method, "BC");
-									rcipher.init(Cipher.DECRYPT_MODE, privKey);
-						    		byte[] userGeneratedNumber = rcipher.doFinal((byte[])temp.get(1));
-						    		
-						    		MessageDigest messageDigest = MessageDigest.getInstance("SHA-256");
-									messageDigest.update(userGeneratedNumber);
-									byte[] hashedNumber = messageDigest.digest();
-						    		response_a.addObject(hashedNumber);
-									
-									//first decrypt to get the original byte data of the AES key 
-									Cipher AES_cipher = Cipher.getInstance(RSA_Method, "BC");
-									AES_cipher.init(Cipher.DECRYPT_MODE, privKey);
-									byte[] decrypted_keys = AES_cipher.doFinal((byte[])temp.get(2));
+										//Get the user generated number and add its hashed value to message 
+										Cipher rcipher = Cipher.getInstance(RSA_Method, "BC");
+										rcipher.init(Cipher.DECRYPT_MODE, privKey);
+							    		byte[] userGeneratedNumber = rcipher.doFinal((byte[])temp.get(1));
+							    		
+							    		MessageDigest messageDigest = MessageDigest.getInstance("SHA-256");
+										messageDigest.update(userGeneratedNumber);
+										byte[] hashedNumber = messageDigest.digest();
+							    		response_a.addObject(hashedNumber);
+										
+										//first decrypt to get the original byte data of the AES key 
+										Cipher AES_cipher = Cipher.getInstance(RSA_Method, "BC");
+										AES_cipher.init(Cipher.DECRYPT_MODE, privKey);
+										byte[] decrypted_keys = AES_cipher.doFinal((byte[])temp.get(2));
 
-									byte[] AES_array = new byte[32];
-									byte[] identity_array = new byte[32];
-									System.arraycopy(decrypted_keys, 0, AES_array, 0, 32);
-									System.arraycopy(decrypted_keys, 32, identity_array, 0, 32);
-									
-									//get the AES key transmitted 
-									AES_key = (SecretKey)new SecretKeySpec(AES_array, "AES");
-									//get the identity transmitted 
-									identity_key = (Key)new SecretKeySpec(identity_array, "HmacSHA256");
+										byte[] AES_array = new byte[32];
+										byte[] identity_array = new byte[32];
+										System.arraycopy(decrypted_keys, 0, AES_array, 0, 32);
+										System.arraycopy(decrypted_keys, 32, identity_array, 0, 32);
+										
+										//get the AES key transmitted 
+										AES_key = (SecretKey)new SecretKeySpec(AES_array, "AES");
+										//get the identity transmitted 
+										identity_key = (Key)new SecretKeySpec(identity_array, "HmacSHA256");
 
-									//randomly generate a new random number for verification, and encrypt it with the user's public key 
-									SecureRandom sr = new SecureRandom();
-									rndBytes = new byte[8];
-									sr.nextBytes(rndBytes);
-							 		Cipher cipher = Cipher.getInstance(RSA_Method, "BC");
-							 		cipher.init(Cipher.ENCRYPT_MODE, usrPubKey);
-							 		response_a.addObject(cipher.doFinal(rndBytes));
+										//randomly generate a new random number for verification, and encrypt it with the user's public key 
+										SecureRandom sr = new SecureRandom();
+										rndBytes = new byte[8];
+										sr.nextBytes(rndBytes);
+								 		Cipher cipher = Cipher.getInstance(RSA_Method, "BC");
+								 		cipher.init(Cipher.ENCRYPT_MODE, usrPubKey);
+								 		response_a.addObject(cipher.doFinal(rndBytes));
+								}
+								else
+								{
+									response_a = new Envelope("FAIL");
+								}
 							}
 							else
-							{
+							{  
 								response_a = new Envelope("FAIL");
 							}
 						}
 						else
-						{  
+						{	
 							response_a = new Envelope("FAIL");
 						}
-					}
-					else
-					{	
-						response_a = new Envelope("FAIL");
-					}
 
-					output.writeObject(response_a);
-					output.flush();
-					output.reset();
+						output.writeObject(response_a);
+						output.flush();
+						output.reset();
 
-					if(response_a.getMessage().equals("FAIL"))
-					{
-						try
+						if(response_a.getMessage().equals("FAIL"))
 						{
+							try
+							{
+								
+								System.out.println("connection is closing from the server side");
+								socket.close();
+							}
+							catch (Exception en)
+							{
+								System.err.println("Error: " + en.getMessage());
+							}
+							proceed = false; //skip the loop
+						}	
+						else
+						{
+						
+							Envelope second_message = (Envelope)input.readObject();
+							byte[] to_be_verified = (byte[])second_message.getObjContents().get(0); //get the hashed number decrypted by the user 
 							
-							System.out.println("connection is closing from the server side");
-							socket.close();
-						}
-						catch (Exception en)
-						{
-							System.err.println("Error: " + en.getMessage());
-						}
-						proceed = false; //skip the loop
-					}	
-					else
+							Envelope response_v = null;
+							if(second_message.getMessage().equals("VERIFY"))
+							{
+									Cipher res_cipher = Cipher.getInstance("AES", "BC");
+									res_cipher.init(Cipher.ENCRYPT_MODE, AES_key);
+
+									
+									String response_message;
+									//hash the server generated data to see whether it's the same as the one received by the user 
+									MessageDigest messageDigest = MessageDigest.getInstance("SHA-256");
+									messageDigest.update(rndBytes);
+									byte[] hashedNumber = messageDigest.digest();
+
+									if(Arrays.equals(to_be_verified, hashedNumber))
+									{
+										response_message = "OK";
+									}
+									else
+									{
+										response_message = "FAIL";
+									}
+									//random generate a t for order-check
+									Random randomGenerator = new Random();
+									t = randomGenerator.nextInt(2147483647/2);
+
+									//encrypt the response by AES_key from now on
+									response_v = new Envelope(response_message);
+
+									Mac mac = Mac.getInstance("HmacSHA256", "BC");
+									mac.init(identity_key);
+
+									Envelope to_be_sent = new Envelope(response_message);
+									to_be_sent.addObject((Integer)t);
+									t++;//increase t to keep order 
+									
+									Cipher object_cipher = Cipher.getInstance("AES/CBC/PKCS5Padding", "BC");
+									object_cipher.init(Cipher.ENCRYPT_MODE, AES_key);
+									
+									SealedObject hmac_msg_sealed = new SealedObject(to_be_sent, object_cipher);
+									response_v.addObject(hmac_msg_sealed);
+									
+									byte[] rawHamc = mac.doFinal(convertToBytes(hmac_msg_sealed));
+									response_v.addObject(rawHamc); //add first object into array 
+							
+									output.writeObject(response_v);
+									output.flush();
+									output.reset();
+									if(response_message.equals("FAIL"))
+									{
+										try
+										{
+											System.out.println("connection is closing from the server side");
+											socket.close();
+										}
+										catch (Exception en)
+										{
+											System.err.println("Error: " + en.getMessage());
+										}
+										proceed = false; //skip the loop
+									}
+							}
+					}
+				}
+				else
+				{
+					try
 					{
-					
-						Envelope second_message = (Envelope)input.readObject();
-						byte[] to_be_verified = (byte[])second_message.getObjContents().get(0); //get the hashed number decrypted by the user 
-						
-						Envelope response_v = null;
-						if(second_message.getMessage().equals("VERIFY"))
-						{
-								Cipher res_cipher = Cipher.getInstance("AES", "BC");
-								res_cipher.init(Cipher.ENCRYPT_MODE, AES_key);
-
-								
-								String response_message;
-								//hash the server generated data to see whether it's the same as the one received by the user 
-								MessageDigest messageDigest = MessageDigest.getInstance("SHA-256");
-								messageDigest.update(rndBytes);
-								byte[] hashedNumber = messageDigest.digest();
-
-								if(Arrays.equals(to_be_verified, hashedNumber))
-								{
-									response_message = "OK";
-								}
-								else
-								{
-									response_message = "FAIL";
-								}
-								//random generate a t for order-check
-								Random randomGenerator = new Random();
-								t = randomGenerator.nextInt(2147483647/2);
-
-								//encrypt the response by AES_key from now on
-								response_v = new Envelope(response_message);
-
-								Mac mac = Mac.getInstance("HmacSHA256", "BC");
-								mac.init(identity_key);
-
-								Envelope to_be_sent = new Envelope(response_message);
-								to_be_sent.addObject((Integer)t);
-								t++;//increase t to keep order 
-								
-								Cipher object_cipher = Cipher.getInstance("AES/CBC/PKCS5Padding", "BC");
-								object_cipher.init(Cipher.ENCRYPT_MODE, AES_key);
-								
-								SealedObject hmac_msg_sealed = new SealedObject(to_be_sent, object_cipher);
-								response_v.addObject(hmac_msg_sealed);
-								
-								byte[] rawHamc = mac.doFinal(convertToBytes(hmac_msg_sealed));
-								response_v.addObject(rawHamc); //add first object into array 
-						
-								output.writeObject(response_v);
-								output.flush();
-								output.reset();
-								if(response_message.equals("FAIL"))
-								{
-									try
-									{
-										System.out.println("connection is closing from the server side");
-										socket.close();
-									}
-									catch (Exception en)
-									{
-										System.err.println("Error: " + en.getMessage());
-									}
-									proceed = false; //skip the loop
-								}
-						}
+						System.out.println("connection is closing from the server side");
+						socket.close();
+					}
+					catch (Exception en)
+					{
+						System.err.println("Error: " + en.getMessage());
+					}
+					proceed = false; //skip the loop
 				}
-			}
-			else
-			{
-				try
-				{
-					System.out.println("connection is closing from the server side");
-					socket.close();
-				}
-				catch (Exception en)
-				{
-					System.err.println("Error: " + en.getMessage());
-				}
-				proceed = false; //skip the loop
 			}
 
 			while(proceed)
