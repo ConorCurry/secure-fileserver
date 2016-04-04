@@ -326,7 +326,6 @@ public class FileThread extends Thread
 					}
 				}			   	
 				else if (e.getMessage().compareTo("DELETEF")==0) {
-
 					String remotePath = (String)e.getObjContents().get(0);
 					Token t = (Token)e.getObjContents().get(1);
 					ShareFile sf = FileServer.fileList.getFile("/"+remotePath);
@@ -365,6 +364,7 @@ public class FileThread extends Thread
 		   						e = new Envelope(e1.getMessage());
 					   		}
 						}
+						output.writeObject(e.encrypted(symKey));
 					} else {
 						e = new Envelope("FAIL-BADTOKEN");
 						output.writeObject(e.encrypted(symKey));
