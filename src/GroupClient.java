@@ -944,6 +944,35 @@ public class GroupClient extends Client implements GroupClientInterface {
 		}		
 	 }
 
+	public boolean requestUser(byte[] encryptedRequestContents) {
+		Envelope req = new Envelope("CREATE-REQ");
+		Envelope response = null;
+		try {
+			req.addObject(encryptedRequestContents);
+			output.reset();
+			output.writeObject(req);
+			output.flush();
+			output.reset();
+
+			response = (Envelope)input.readObject();
+		} catch (Exception ex) {
+			System.err.println("Error in requesting user creation: " + ex);
+		}
+		
+		if (response != null && response.getMessage().equals("OK")) { return true; }
+		else { return false; }
+	}
+
+	public Hashtable<String, PublicKey> lUserRequests(UserToken token) {
+		Envelope message = new Envelope("LREQS");
+		message.addObject((Integer)t);
+		t++;
+		message.addObject(token);
+		sendEncryptedWithHMAC(message);
+		return new Hashtable<String, PublicKey>(); //TODO
+		
+	}
+
 	 private byte[] convertToBytes(Object object){
  		try{ 
     	   	ByteArrayOutputStream bos = new ByteArrayOutputStream();
@@ -958,5 +987,55 @@ public class GroupClient extends Client implements GroupClientInterface {
     		System.out.println("Can't convert object to a byte array");
     		return null;
     	}
+	}
+
+	private void sendEncryptedWithHMAC(Envelope message) { 
+		try {
+			Mac mac = Mac.getInstance("HmacSHA256", "BC");
+			mac.init(identity_key);
+
+			Envelope to_be_sent = new Envelope("REQ");
+												
+			Cipher object_cipher = Cipher.getInstance("AES/CBC/PKCS5Padding", "BC");
+			object_cipher.init(Cipher.ENCRYPT_MODE, AES_key);
+								
+			SealedObject hmac_msg_sealed = new SealedObject(message, object_cipher);
+			to_be_sent.addObject(hmac_msg_sealed);
+													
+			byte[] rawHamc = mac.doFinal(convertToBytes(hmac_msg_sealed));
+			to_be_sent.addObject(rawHamc);
+
+			output.reset();
+			output.writeObject(to_be_sent);
+			output.flush();
+			output.reset();
+		} catch(Exception ex) {
+			System.err.println("Error in sending encrypted response (AES/HMAC): " + ex);
+		}
+	}
+	private Envelope recieveEncryptedWithHMAC() {
+		Envelope response  = null;
+		Envelope plaintext = null;
+		try {			
+			response = (Envelope)input.readObject();
+			byte[] msg_combined_encrypted = convertToBytes((SealedObject)response.getObjContents().get(0));
+			Mac mac = Mac.getInstance("HmacSHA256", "BC");
+			mac.init(identity_key);
+			byte[] rawHamc_2 = mac.doFinal(msg_combined_encrypted);
+			byte[] Hmac_passed = (byte[])response.getObjContents().get(1);
+			if(Arrays.equals(rawHamc_2, Hmac_passed)) {
+				plaintext = (Envelope)((SealedObject)response.getObjContents().get(0)).getObject(AES_key);
+				int t_received = (Integer)plaintext.getObjContents().get(0);
+				if(t_received == t) {
+					t++;
+				} else {
+					System.out.println("The message is replayed/reordered.");
+					disconnect();
+				}
+			}
+		} catch(Exception e) {
+			System.err.println("Error recieving an encrypted response (AES/HMAC): " + e);
+		}
+		return plaintext;
 	}
 }

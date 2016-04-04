@@ -10,6 +10,7 @@ import javax.crypto.*;
 import java.security.*;
 import javax.crypto.spec.SecretKeySpec;
 import java.security.spec.PKCS8EncodedKeySpec;
+import java.security.spec.X509EncodedKeySpec;
 import javax.xml.bind.DatatypeConverter;
 import javax.crypto.spec.IvParameterSpec;
 import java.nio.ByteBuffer;
@@ -21,6 +22,10 @@ public class GroupThread extends Thread
 	private GroupServer my_gs;
 	private PublicKey pubKey;
 	private PrivateKey privKey;
+	private Key identity_key;
+	private SecretKey AES_key;
+	private ObjectInputStream input;
+	private ObjectOutputStream output;
 	
 	public GroupThread(Socket _socket, GroupServer _gs)
 	{
@@ -34,6 +39,7 @@ public class GroupThread extends Thread
 		Security.addProvider(new BouncyCastleProvider());
 		String RSA_Method = "RSA/NONE/OAEPWithSHA256AndMGF1Padding";
 		String AES_Method = "AES/CBC/PKCS5Padding";
+		String userRequestsFile = "UserRequests.bin";
 		
 		//read the server's public key in and private key in 
 		try
@@ -84,18 +90,19 @@ public class GroupThread extends Thread
 			proceed = false; //skip the loop
 		}
 		SecretKey AES_key = null;
-		Key identity_key = null;
+		identity_key = null;
 		int t = 0;
 		try
 		{
 			//Announces connection and opens object streams
 			System.out.println("*** New connection from " + socket.getInetAddress() + ":" + socket.getPort() + "***");
-			final ObjectInputStream input = new ObjectInputStream(socket.getInputStream());
-			final ObjectOutputStream output = new ObjectOutputStream(socket.getOutputStream());
+			input = new ObjectInputStream(socket.getInputStream());
+		    output = new ObjectOutputStream(socket.getOutputStream());
 			
 			Envelope first_message = (Envelope)input.readObject();
 			System.out.println("receive message from client");
 			Envelope response_a = null; //the response for authentication 
+<<<<<<< HEAD
 			boolean authOrNot = true;
 		    if(first_message.getMessage().equals("GetPubKey"))
 		    {
@@ -129,6 +136,23 @@ public class GroupThread extends Thread
 				{
 					first_message = (Envelope)input.readObject();
 				}
+=======
+			//have to do the authentication first 
+			System.out.println("Message recieved: " + first_message.getMessage());
+			if(first_message.getMessage().equals("CHALLENGE"))
+			{
+					//get objects in the message 
+					ArrayList<Object> temp = first_message.getObjContents();
+					byte[] rndBytes = null;
+					//first username, second-encrypted number, third- encrypted AES key, forth signed AES key
+					if(temp != null && temp.size() == 4)
+					{
+						//decrypt the sealed object with server's private key 
+						Cipher dec = Cipher.getInstance(RSA_Method, "BC");
+						dec.init(Cipher.DECRYPT_MODE, privKey);
+						
+						String username = (String)temp.get(0);
+>>>>>>> origin/extraCredit
 
 				if(first_message.getMessage().equals("CHALLENGE"))
 				{
@@ -294,8 +318,63 @@ public class GroupThread extends Thread
 										}
 										proceed = false; //skip the loop
 									}
+<<<<<<< HEAD
 							}
 					}
+=======
+									proceed = false; //skip the loop
+								}
+						}
+				}
+			}
+			else if(first_message.getMessage().equals("CREATE-REQ")) {
+				System.out.print("beginning decryption...");
+				Hashtable<String, PublicKey> requests_pubKeys = new Hashtable<String, PublicKey>();
+				ObjectInputStream reqsIn = new ObjectInputStream(new FileInputStream(userRequestsFile));
+				requests_pubKeys = (Hashtable<String, PublicKey>)reqsIn.readObject();
+				reqsIn.close();
+				ObjectOutputStream reqsOut = new ObjectOutputStream(new FileOutputStream(userRequestsFile));
+				byte[] encryptedReq = (byte[])first_message.getObjContents().get(0);
+				byte[] encReq1 = Arrays.copyOfRange(encryptedReq, 0, encryptedReq.length/2);
+				byte[] encReq2 = Arrays.copyOfRange(encryptedReq, encryptedReq.length/2, encryptedReq.length);
+				Envelope resp = new Envelope("FAIL");
+				//decrypt message
+				try {
+					Cipher ciph = Cipher.getInstance("RSA", "BC");
+					ciph.init(Cipher.DECRYPT_MODE, privKey);
+					byte[] plain1 = ciph.doFinal(encReq1);
+					byte[] plain2 = ciph.doFinal(encReq2);
+					byte[] plain = new byte[plain1.length + plain2.length];
+					System.arraycopy(plain1, 0, plain, 0, plain1.length);
+					System.arraycopy(plain2, 0, plain, plain1.length, plain2.length);
+					ByteArrayInputStream bIn = new ByteArrayInputStream(plain);
+					ObjectInputStream oIn = new ObjectInputStream(bIn);
+					ArrayList<byte[]> reqContents = (ArrayList<byte[]>)oIn.readObject();
+					String uname = new String(reqContents.get(0));
+					PublicKey uPubKey = KeyFactory.getInstance("RSA", "BC").generatePublic(new X509EncodedKeySpec(reqContents.get(1)));
+					requests_pubKeys.put(uname, uPubKey);
+					reqsOut.writeObject(requests_pubKeys);
+					reqsOut.close();
+					resp = new Envelope("OK");
+					System.out.println("done");
+				} catch(Exception e) {
+					System.err.println("Error in processing create user request:");
+					e.printStackTrace();
+				}
+				System.out.print("Sending response...");
+				output.reset();
+				output.writeObject(resp);
+				output.flush();
+				output.reset();
+				System.out.println("done");
+			}
+			else
+			{
+				try
+				{
+					System.out.println("connection is closing from the server side");
+					socket.close();
+>>>>>>> origin/extraCredit
 				}
 				else
 				{
@@ -343,6 +422,8 @@ public class GroupThread extends Thread
 							System.out.println("The message is replayed/reordered!");
 							break;
 						}
+				} else {
+					System.out.println("HMAC could not be verified!");
 				}
 				System.out.println("Request received: " + instruction);
 				Envelope response = null;
@@ -389,7 +470,25 @@ public class GroupThread extends Thread
 				   	output.flush();
 					output.reset();
 				}
-				if(instruction.equals("GET_SUBSET"))//Client wants a token
+
+				else if(instruction.equals("LREQS")) {
+					Envelope resp = new Envelope("FAIL");
+					Token tok = (Token)plaintext.getObjContents().get(1);
+					if(tok.getGroups().contains("ADMIN")) {
+						Hashtable<String, PublicKey> requests_pubKeys = new Hashtable<String, PublicKey>();
+						ObjectInputStream reqsIn = new ObjectInputStream(new FileInputStream(userRequestsFile));
+						requests_pubKeys = (Hashtable<String, PublicKey>)reqsIn.readObject();
+						reqsIn.close();
+						ObjectOutputStream reqsOut = new ObjectOutputStream(new FileOutputStream(userRequestsFile));
+						resp = new Envelope("OK");
+						resp.addObject((Integer)t);
+						t++;
+						resp.addObject(requests_pubKeys);
+					}
+					sendEncryptedWithHMAC(resp);
+				}
+
+				else if(instruction.equals("GET_SUBSET"))//Client wants a token
 				{
 					String username = (String)plaintext.getObjContents().get(1); //Get the username
 					ArrayList<String> subset = null;
@@ -1321,5 +1420,29 @@ public class GroupThread extends Thread
     		System.out.println("Can't convert object to a byte array");
     		return null;
     	}
+	}
+	private void sendEncryptedWithHMAC(Envelope message) {
+		try {
+			Mac mac = Mac.getInstance("HmacSHA256", "BC");
+			mac.init(identity_key);
+
+			Envelope to_be_sent = new Envelope("REQ");
+												
+			Cipher object_cipher = Cipher.getInstance("AES/CBC/PKCS5Padding", "BC");
+			object_cipher.init(Cipher.ENCRYPT_MODE, AES_key);
+								
+			SealedObject hmac_msg_sealed = new SealedObject(message, object_cipher);
+			to_be_sent.addObject(hmac_msg_sealed);
+													
+			byte[] rawHamc = mac.doFinal(convertToBytes(hmac_msg_sealed));
+			to_be_sent.addObject(rawHamc);
+
+			output.reset();
+			output.writeObject(to_be_sent);
+			output.flush();
+			output.reset();
+		} catch(Exception ex) {
+			System.err.println("Error in sending encrypted message (AES/HMAC): " + ex);
+		}
 	}
 }

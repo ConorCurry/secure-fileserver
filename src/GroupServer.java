@@ -34,6 +34,7 @@ public class GroupServer extends Server {
 		// Overwrote server.start() because if no user file exists, initial admin account needs to be created
 		String userFile = "UserList.bin";
 		String groupFile = "GroupList.bin";
+		String userRequestsFile = "UserRequests.bin";
 		Scanner console = new Scanner(System.in);
 		ObjectInputStream userStream;
 		ObjectInputStream groupStream;
@@ -57,7 +58,7 @@ public class GroupServer extends Server {
 		}
 		catch(FileNotFoundException e)
 		{
-			System.out.println("UserList or GroupList File Does Not Exist. Creating...");
+			System.out.println("UserList/GroupList/Requests File Does Not Exist. Creating...");
 			System.out.println("No users currently exist. Your account will be the administrator.");
 			System.out.print("Enter your username: ");
 			String username = console.next();
@@ -70,6 +71,17 @@ public class GroupServer extends Server {
 			{
 				String AES_Method = "AES/CBC/PKCS5Padding";
 				Security.addProvider(new BouncyCastleProvider());
+				//generate empty hashtable for storing users requesting accounts
+				try {
+					FileInputStream reqs = new FileInputStream(userRequestsFile);
+				} catch(FileNotFoundException ex) {
+					System.out.print("Could not find user requests file. Creating...");
+					Hashtable<String, PublicKey> requests_pubKeys = new Hashtable<String, PublicKey>();
+					ObjectOutputStream reqsOut = new ObjectOutputStream(new FileOutputStream(userRequestsFile));
+					reqsOut.writeObject(requests_pubKeys);
+					reqsOut.close();
+					System.out.println("done.");
+				}
 				
 				//generate a key pair for the first user, store the user and public key in one file, and store the user and the encrypted private key in another file
 				Hashtable <String, PublicKey> user_publicKeys = new Hashtable <String, PublicKey>();
@@ -127,7 +139,7 @@ public class GroupServer extends Server {
 	            ObjectOutputStream sPubKOutStream = new ObjectOutputStream(new FileOutputStream("ServerPublic.bin"));
 	            sPubKOutStream.writeObject(server_pub);
 	            sPubKOutStream.close();
-				
+			
 				//hash the password and make it to be the secret key to encrypt the private keys 
 				MessageDigest messageDigest2 = MessageDigest.getInstance("SHA-256");
 				messageDigest2.update(password.getBytes());
