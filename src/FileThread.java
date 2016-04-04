@@ -17,6 +17,8 @@ import javax.crypto.*;
 import java.security.*;
 import java.security.spec.PKCS8EncodedKeySpec;
 import javax.crypto.spec.SecretKeySpec;
+import java.math.BigInteger;
+import java.util.Scanner;
 
 public class FileThread extends Thread
 {
@@ -181,6 +183,7 @@ public class FileThread extends Thread
 							String remotePath = (String)e.getObjContents().get(0);
 							String group = (String)e.getObjContents().get(1);
 							UserToken yourToken = (UserToken)e.getObjContents().get(2); //Extract token
+							int index = (Integer)e.getObjContents().get(3); //extract the index of the key used 
 							if(yourToken.tokVerify(groupkey)) {
 
 								if (FileServer.fileList.checkFile(remotePath)) {
@@ -210,7 +213,7 @@ public class FileThread extends Thread
 
 									if(e.getMessage().compareTo("EOF")==0) {
 										System.out.printf("Transfer successful file %s\n", remotePath);
-										FileServer.fileList.addFile(yourToken.getSubject(), group, remotePath);
+										FileServer.fileList.addFile(yourToken.getSubject(), group, remotePath, index);
 										response = new Envelope("OK"); //Success
 									}
 									else {
@@ -255,9 +258,9 @@ public class FileThread extends Thread
 										output.writeObject(e.encrypted(symKey));
 
 									}
-									else {
+									else {			
+										int i = 0;
 										FileInputStream fis = new FileInputStream(f);
-
 										do {
 											byte[] buf = new byte[4096];
 											if (e.getMessage().compareTo("DOWNLOADF")!=0) {
@@ -276,11 +279,12 @@ public class FileThread extends Thread
 
 											e.addObject(buf);
 											e.addObject(new Integer(n));
+											if(i == 0) e.addObject(new Integer(sf.getKeyIndex()));
 
 											output.writeObject(e.encrypted(symKey));
 
 											e = (Envelope) ( (SealedObject)input.readObject() ).getObject(symKey);
-
+											i++;
 
 										} while (fis.available()>0);
 

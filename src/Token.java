@@ -129,6 +129,7 @@ public class Token implements UserToken, java.io.Serializable{
 			dos.writeLong((new Date()).getTime());
 			dos.close();
 			byte[] longBytes = baos.toByteArray();
+			System.out.println("Time created is encrypted Successfully.");
 		 	return cipher.doFinal(longBytes);
 		}
 		catch(Exception e)

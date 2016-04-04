@@ -151,20 +151,23 @@ public class FileClient extends Client implements FileClientInterface {
 					    env.addObject(token);
 					    output.writeObject(env.encrypted(symKey)); 
 						
-						Cipher cipher = Cipher.getInstance("AES/CTR/NoPadding", "BC");
-			 			SecretKey decrypt_key = key_list.get(key_list.size() - 1);
+					    Cipher cipher = Cipher.getInstance("AES/CTR/NoPadding", "BC");
+			 			SecretKey decrypt_key = null;
 			 			byte[] IVarray = Arrays.copyOf(convertToBytes(group), 16);
+			 			int i = 0;
 
-					    env = (Envelope)((SealedObject)input.readObject()).getObject(symKey);
-					    
+			 			env = (Envelope)((SealedObject)input.readObject()).getObject(symKey);
+
 						while (env.getMessage().compareTo("CHUNK")==0) { 
+								if(i == 0) decrypt_key = key_list.get((Integer)env.getObjContents().get(2));
 								cipher.init(Cipher.DECRYPT_MODE, decrypt_key, new IvParameterSpec(IVarray));
 								byte[] decrypted_data = cipher.doFinal((byte[])env.getObjContents().get(0));
 								fos.write(decrypted_data, 0, (Integer)env.getObjContents().get(1));
 								System.out.printf(".");
 								env = new Envelope("DOWNLOADF"); //Success
 								output.writeObject(env.encrypted(symKey));
-								env = (Envelope)((SealedObject)input.readObject()).getObject(symKey);		
+								env = (Envelope)((SealedObject)input.readObject()).getObject(symKey);	
+								i++;	
 						}										
 						fos.close();
 						
@@ -254,6 +257,7 @@ public class FileClient extends Client implements FileClientInterface {
 			 message.addObject(destFile);
 			 message.addObject(group);
 			 message.addObject(token); //Add requester's token
+			 message.addObject(new Integer(key_list.size()-1)); //add the index of key used 
 			 output.writeObject(message.encrypted(symKey));
 			
 			 
