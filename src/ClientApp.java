@@ -55,10 +55,21 @@ public class ClientApp
 		boolean requestNew = false;
 		if (input.nextLine().equalsIgnoreCase("y")) {
 			try {
-				requestNewUser();
-			} catch(Exception ex) {
+				if(!requestNewUser())
+                {
+                    System.out.println("Can't create a new account");
+                    System.out.println("Exiting the application-----------------------------------------------------");
+                    groupClient.disconnect();
+                    System.exit(-1);
+                }
+			} 
+            catch(Exception ex) 
+            {
 				System.err.print("Error in requesting new user!");
 				ex.printStackTrace();
+                System.out.println("Exiting the application-----------------------------------------------------");
+                groupClient.disconnect();
+                 System.exit(-1);
 			}
 		}
         do {
@@ -73,101 +84,54 @@ public class ClientApp
             userPubKeysStream.close();
 
             boolean existed = false;
-            //if not, create a new key pair and add it into the file
+            //if not, forced to quit to create a new account 
             if(!user_publicKeys.containsKey(username))
             {
-                System.out.print("Please create a password for your account: ");
-                String user_password = input.nextLine();
-
-                //generate a key pair for the first user, store the user and public key in one file, and store the user and the encrypted private key in another file
-                KeyPairGenerator kpg = KeyPairGenerator.getInstance("RSA", "BC");
-                kpg.initialize(3072, new SecureRandom());
-                KeyPair kp = kpg.genKeyPair();
-                pubKey = kp.getPublic();
-                privKey = kp.getPrivate();
-                user_publicKeys.put(username, pubKey);
-                
-                //write the updated table back to the file 
-                FileOutputStream uPubos = new FileOutputStream("UserPublicKeys.bin");
-                ObjectOutputStream uPubKOutStream = new ObjectOutputStream(uPubos);
-                uPubKOutStream.writeObject(user_publicKeys);
-                uPubos.close();
-                uPubKOutStream.close();
-                
-                //hash the user's password and make it to be the secret key to encrypt the private keys 
-                MessageDigest messageDigest = MessageDigest.getInstance("SHA-256");
-                messageDigest.update(user_password.getBytes());
-                byte[] hashedPassword = messageDigest.digest();
-                
-                //Actually encrypt the user's private key 
-                Cipher ucipher = Cipher.getInstance(AES_Method, "BC");
-                //create a shared key with the user's hashed password 
-                SecretKey generated_skey = new SecretKeySpec(hashedPassword, "AES");
-
-                //generate a 16-bit salt
-                SecureRandom random = new SecureRandom();
-                byte[] user_salt = new byte[16];
-                random.nextBytes(user_salt);
-
-                IvParameterSpec user_ivSpec = new IvParameterSpec(user_salt);
-
-                ucipher.init(Cipher.ENCRYPT_MODE, generated_skey, user_ivSpec);
-                
-                byte[] key_data = (privKey).getEncoded();
-                byte[] encrypted_data = ucipher.doFinal(key_data);
-                
-                 //read the key pair file to see whether the user exists already.
-                FileInputStream uPrivis = new FileInputStream("UserPrivateKeys.bin");
-                ObjectInputStream userPrivKeysStream = new ObjectInputStream(uPrivis);
-                Hashtable<String, ArrayList<byte[]>> user_privKeys = (Hashtable<String, ArrayList<byte[]>>)userPrivKeysStream.readObject();
-                uPrivis.close();
-                userPrivKeysStream.close();
-
-                ArrayList<byte[]> salt_priv = new ArrayList<byte[]>();
-                salt_priv.add(encrypted_data);
-                salt_priv.add(user_salt);
-                user_privKeys.put(username, salt_priv);
-
-                //write the updated table back to the file 
-                FileOutputStream uPrivos = new FileOutputStream("UserPrivateKeys.bin");
-                ObjectOutputStream uPrivKOutStream = new ObjectOutputStream(uPrivos);
-                uPrivKOutStream.writeObject(user_privKeys);
-                uPrivos.close();
-                uPrivKOutStream.close();
+                System.out.println("Sorry, you are not a user yet. You need to create your account first. Exiting the application-----");
+                groupClient.disconnect();
+                System.exit(-1);
             }
             else
             {
                 existed = true;
+                try
+                {
+                    //read from the existed file 
+                    pubKey = user_publicKeys.get(username);
+                    System.out.print("Please enter your password: ");
+                    String user_password = input.nextLine();
 
-                //read from the existed file 
-                pubKey = user_publicKeys.get(username);
-                System.out.print("Please enter your password: ");
-                String user_password = input.nextLine();
+                    //hash the user's password and make it to be the secret key to encrypt the private keys 
+                    MessageDigest messageDigest = MessageDigest.getInstance("SHA-256");
+                    messageDigest.update(user_password.getBytes());
+                    byte[] hashedPassword = messageDigest.digest();
 
-                //hash the user's password and make it to be the secret key to encrypt the private keys 
-                MessageDigest messageDigest = MessageDigest.getInstance("SHA-256");
-                messageDigest.update(user_password.getBytes());
-                byte[] hashedPassword = messageDigest.digest();
+                    FileInputStream uPrivis = new FileInputStream("UserPrivateKeys.bin");
+                    ObjectInputStream userPrivKeysStream = new ObjectInputStream(uPrivis);
+                    Hashtable<String, ArrayList<byte[]>> user_privKeys = (Hashtable<String, ArrayList<byte[]>>)userPrivKeysStream.readObject();
+                    uPrivis.close();
+                    userPrivKeysStream.close();
 
-                FileInputStream uPrivis = new FileInputStream("UserPrivateKeys.bin");
-                ObjectInputStream userPrivKeysStream = new ObjectInputStream(uPrivis);
-                Hashtable<String, ArrayList<byte[]>> user_privKeys = (Hashtable<String, ArrayList<byte[]>>)userPrivKeysStream.readObject();
-                uPrivis.close();
-                userPrivKeysStream.close();
+                    byte[] key_data = user_privKeys.get(username).get(0);
+                    byte[] salt = user_privKeys.get(username).get(1);
 
-                byte[] key_data = user_privKeys.get(username).get(0);
-                byte[] salt = user_privKeys.get(username).get(1);
-
-                IvParameterSpec user_ivSpec = new IvParameterSpec(salt);
-                //decrypt the one read from the file to get the server's private key 
-                Cipher cipher_privKey = Cipher.getInstance(AES_Method, "BC");
-                //create a shared key with the user's hashed password 
-                SecretKey skey = new SecretKeySpec(hashedPassword, "AES");
-                cipher_privKey.init(Cipher.DECRYPT_MODE, skey, user_ivSpec);
-                byte[] decrypted_data = cipher_privKey.doFinal(key_data);
-                
-                KeyFactory kf = KeyFactory.getInstance("RSA", "BC");
-                privKey = kf.generatePrivate(new PKCS8EncodedKeySpec(decrypted_data));
+                    IvParameterSpec user_ivSpec = new IvParameterSpec(salt);
+                    //decrypt the one read from the file to get the server's private key 
+                    Cipher cipher_privKey = Cipher.getInstance(AES_Method, "BC");
+                    //create a shared key with the user's hashed password 
+                    SecretKey skey = new SecretKeySpec(hashedPassword, "AES");
+                    cipher_privKey.init(Cipher.DECRYPT_MODE, skey, user_ivSpec);
+                    byte[] decrypted_data = cipher_privKey.doFinal(key_data);
+                    
+                    KeyFactory kf = KeyFactory.getInstance("RSA", "BC");
+                    privKey = kf.generatePrivate(new PKCS8EncodedKeySpec(decrypted_data));
+                }
+                catch(Exception ex)
+                {
+                    System.out.println("Fail to fetch your private key. Please re-log in and try again.");
+                    System.out.println("Exiting the application----------------------------------------");
+                    System.exit(-1);
+                }
             }
             boolean verified = false;
             boolean getKey = true;
@@ -184,6 +148,8 @@ public class ClientApp
                     FileInputStream fis = new FileInputStream("GSPublicKey_client.bin");
                     ObjectInputStream fileStream = new ObjectInputStream(fis);
                     gs_pubKeys = (ArrayList<PublicKey>)fileStream.readObject();
+                    fileStream.close();
+                    fis.close();
                     if(gs_pubKeys != null && gs_pubKeys.size() == 1)
                     {
                         //go to group server to request token to connect to the file server 
@@ -1082,7 +1048,6 @@ public class ClientApp
 		
         return group_to_be_returned;
 	}
-<<<<<<< HEAD
 
     public static boolean verfify_timeOut()
     {
@@ -1092,13 +1057,49 @@ public class ClientApp
         }
         return true;
     }
-=======
+
 	public static void approveRequests() {
-		if (token != null) {
-			Hashtable<String, PublicKey> reqs = groupClient.lUserRequests(token);
-		} else {
-			System.out.println("Invalid token.");
-		}
+        System.out.print("You've chosen to see all the pending requests. Press 1 to continue. Press other number to go back to main menu: ");
+        choice = input.nextInt();
+        input.nextLine();
+        if(choice == 1)
+        {
+    		if (token != null) 
+            {
+    			Hashtable<String, PublicKey> reqs = (Hashtable<String, PublicKey>)groupClient.lUserRequests(token);
+                if(reqs != null && reqs.size() != 0)
+                {
+                    System.out.println("Here are the user requests waiting to be approved");
+                    //iterate all the user name and print out 
+                    int i = 1;
+                    Set<String> keys = reqs.keySet();
+                    for(String key: keys)
+                    {
+                        System.out.println(i + ". "+key);
+                    }
+                    String choice = "";
+                    do
+                    {
+                        System.out.print("Please enter the user name to indicate which user you would like to approve: ");
+                        choice = input.nextLine();
+                    }
+                    while(!reqs.containsKey(choice));
+                    if(groupClient.createUser(choice, token, reqs.get(choice)))
+                        System.out.println("Congratulations! You have created user " + choice + " successfully!");
+                    else
+                        System.out.println("Sorry. You fail to create this user. Please try other options.");
+                }
+                else
+                {
+                    System.out.println("There is no pending request.");
+                }
+    		} 
+            else 
+            {
+    			System.out.println("Invalid token.");
+    		}
+        }
+        System.out.println("Returning to main menu...");
 	}
 
 	public static boolean requestNewUser() throws Exception{
@@ -1155,7 +1156,6 @@ public class ClientApp
 			byte[] key_data = (privKey).getEncoded();
 			byte[] encrypted_data = ucipher.doFinal(key_data);
                 
-			//read the key pair file to see whether the user exists already.
 			FileInputStream uPrivis = new FileInputStream("UserPrivateKeys.bin");
 			ObjectInputStream userPrivKeysStream = new ObjectInputStream(uPrivis);
 			Hashtable<String, ArrayList<byte[]>> user_privKeys = (Hashtable<String, ArrayList<byte[]>>)userPrivKeysStream.readObject();
@@ -1173,80 +1173,99 @@ public class ClientApp
 			uPrivKOutStream.writeObject(user_privKeys);
 			uPrivos.close();
 			uPrivKOutStream.close();
-		} else {
-			existed = true;
-            //read from the existed file 
-            pubKey = user_publicKeys.get(username);
-			System.out.print("Please enter your password: ");
-			String user_password = input.nextLine();
-
-			//hash the user's password and make it to be the secret key to encrypt the private keys 
-			MessageDigest messageDigest = MessageDigest.getInstance("SHA-256");
-			messageDigest.update(user_password.getBytes());
-			byte[] hashedPassword = messageDigest.digest();
-
-			FileInputStream uPrivis = new FileInputStream("UserPrivateKeys.bin");
-			ObjectInputStream userPrivKeysStream = new ObjectInputStream(uPrivis);
-			Hashtable<String, ArrayList<byte[]>> user_privKeys = (Hashtable<String, ArrayList<byte[]>>)userPrivKeysStream.readObject();
-			uPrivis.close();
-			userPrivKeysStream.close();
-
-			byte[] key_data = user_privKeys.get(username).get(0);
-			byte[] salt = user_privKeys.get(username).get(1);
-
-			IvParameterSpec user_ivSpec = new IvParameterSpec(salt);
-			//decrypt the one read from the file to get the server's private key 
-			Cipher cipher_privKey = Cipher.getInstance(AES_Method, "BC");
-			//create a shared key with the user's hashed password 
-			SecretKey skey = new SecretKeySpec(hashedPassword, "AES");
-			cipher_privKey.init(Cipher.DECRYPT_MODE, skey, user_ivSpec);
-			byte[] decrypted_data = cipher_privKey.doFinal(key_data);
-                
-			KeyFactory kf = KeyFactory.getInstance("RSA", "BC");
-			privKey = kf.generatePrivate(new PKCS8EncodedKeySpec(decrypted_data));
+		} 
+        else 
+        {
+			System.out.println("Sorry, you're not allowed to create your user account because this username is used. Please try another one later.");
+            System.out.println("Exiting the application-----------------------------------------------------");
+            groupClient.disconnect();
+            System.exit(-1);
 		}		
 
-		//read in server's public key from the file storing server's public key 
-		FileInputStream kfis = new FileInputStream("ServerPublic.bin");
-		ObjectInputStream serverKeysStream = new ObjectInputStream(kfis);
-		PublicKey serverPubKey = ((ArrayList<PublicKey>)serverKeysStream.readObject()).get(0);
-		kfis.close();
-		serverKeysStream.close();
+		//request the public key from group server because it is the first time to connect. 
+		PublicKey gsPubKey = groupClient.getGSkey();
+        System.out.println("Getting key from group server");
+        String ct = "";      
+        if(gsPubKey == null)
+        {
+                System.out.println("Fail to get Group Server's publc key.");
+                System.out.println("Exiting the application-----------------------------------------------------");
+                groupClient.disconnect();
+                System.exit(-1);
+        }
+        else
+        {
+                ArrayList<PublicKey> gs_pubKeys = new ArrayList<PublicKey>();
 
-		//pack username and public key
-		ArrayList<byte[]> request = new ArrayList<byte[]>();
-		request.add(username.getBytes());
-		request.add(pubKey.getEncoded());
-		ByteArrayOutputStream bOut = new ByteArrayOutputStream();
-		ObjectOutputStream objOut = new ObjectOutputStream(bOut);
-		objOut.writeObject(request);
-		byte[] reqBytes = bOut.toByteArray();
-		byte[] encReqBytes = new byte[(3072/8) * 2]; //enough space for two items encrpyted with the 3072 bit server public key
+                gs_pubKeys.add(gsPubKey);
+                //write server's public key to a file 
+                try
+                {
+                    ObjectOutputStream sPubKOutStream = new ObjectOutputStream(new FileOutputStream("GSPublicKey_client.bin"));
+                    sPubKOutStream.writeObject(gs_pubKeys);
+                    sPubKOutStream.close();
+                    //print public key out for user to verify 
+                    System.out.println("RSA Key is: " + DatatypeConverter.printBase64Binary(gsPubKey.getEncoded()));
+                    System.out.print("Do you want to continue? y/n: ");
+                    ct = input.nextLine();
+                }
+                catch(Exception e)
+                {
+                    System.out.println("Fail to write it back");
+                    System.out.println("Exiting the application-----------------------------------------------------");
+                    groupClient.disconnect();
+                    System.exit(-1);
+                }
+        }
+        if(ct.equalsIgnoreCase("y"))
+        {
+    		//pack username and public key
+    		ArrayList<byte[]> request = new ArrayList<byte[]>();
+    		request.add(username.getBytes());
+    		request.add(gsPubKey.getEncoded());
+    		ByteArrayOutputStream bOut = new ByteArrayOutputStream();
+    		ObjectOutputStream objOut = new ObjectOutputStream(bOut);
+    		objOut.writeObject(request);
+    		byte[] reqBytes = bOut.toByteArray();
+    		byte[] encReqBytes = new byte[(3072/8) * 2]; //enough space for two items encrpyted with the 3072 bit server public key
 
-		//encrypt packed bytes with group server's public key
-		try {
-			Cipher cipher = Cipher.getInstance("RSA", "BC");
-			cipher.init(Cipher.ENCRYPT_MODE, serverPubKey);
-			byte[] enc1 = cipher.doFinal(Arrays.copyOfRange(reqBytes, 0, reqBytes.length/2));
-			byte[] enc2 = cipher.doFinal(Arrays.copyOfRange(reqBytes, reqBytes.length/2, reqBytes.length));
-			System.arraycopy(enc1, 0, encReqBytes, 0, enc1.length);
-			System.arraycopy(enc2, 0, encReqBytes, enc1.length, enc2.length);
-		} catch(Exception e) {
-			System.err.println("Error encrypting user creation request (RSA): ");
-			e.printStackTrace();
-			return false;
-		}
-		
-		//let groupClient handle communication with server
-	    if(groupClient.requestUser(encReqBytes)) {
-			System.out.print("Request successfully submitted! Continue to login? (y/n): ");
-			if (!input.nextLine().equalsIgnoreCase("y")) {
-				end();
-			}
-			return true;
-		} else {
-			return false;
-		}	
+    		//encrypt packed bytes with group server's public key
+    		try 
+            {
+    			Cipher cipher = Cipher.getInstance("RSA", "BC");
+    			cipher.init(Cipher.ENCRYPT_MODE, gsPubKey);
+    			byte[] enc1 = cipher.doFinal(Arrays.copyOfRange(reqBytes, 0, reqBytes.length/2));
+    			byte[] enc2 = cipher.doFinal(Arrays.copyOfRange(reqBytes, reqBytes.length/2, reqBytes.length));
+    			System.arraycopy(enc1, 0, encReqBytes, 0, enc1.length);
+    			System.arraycopy(enc2, 0, encReqBytes, enc1.length, enc2.length);
+    		} 
+            catch(Exception e)
+            {
+    			System.err.println("Error encrypting user creation request (RSA): ");
+    			e.printStackTrace();
+    			System.out.println("Exiting the application-----------------------------------------------------");
+                groupClient.disconnect();
+                System.exit(-1);
+    		}
+    		
+    		//let groupClient handle communication with server
+    	    if(groupClient.requestUser(encReqBytes))
+            {
+    			System.out.print("Request successfully submitted! You have to log in again.");
+    			end();
+    		} 
+            else 
+            {
+    			return false;
+    		}	
+        }
+        else
+        {
+             System.out.println("Fail to verify Group Server's publc key.");
+             System.out.println("Exiting the application-----------------------------------------------------");
+             groupClient.disconnect();
+             System.exit(-1);
+        }
+        return false;
 	}
->>>>>>> origin/extraCredit
 }

@@ -71,18 +71,14 @@ public class GroupServer extends Server {
 			{
 				String AES_Method = "AES/CBC/PKCS5Padding";
 				Security.addProvider(new BouncyCastleProvider());
-				//generate empty hashtable for storing users requesting accounts
-				try {
-					FileInputStream reqs = new FileInputStream(userRequestsFile);
-				} catch(FileNotFoundException ex) {
-					System.out.print("Could not find user requests file. Creating...");
-					Hashtable<String, PublicKey> requests_pubKeys = new Hashtable<String, PublicKey>();
-					ObjectOutputStream reqsOut = new ObjectOutputStream(new FileOutputStream(userRequestsFile));
-					reqsOut.writeObject(requests_pubKeys);
-					reqsOut.close();
-					System.out.println("done.");
-				}
 				
+				//generate empty hashtable for storing users requesting accounts
+				Hashtable<String, PublicKey> requests_pubKeys = new Hashtable<String, PublicKey>();
+				ObjectOutputStream reqsOut = new ObjectOutputStream(new FileOutputStream(userRequestsFile));
+				reqsOut.writeObject(requests_pubKeys);
+				reqsOut.close();
+				System.out.println("UserRequests created.");
+	
 				//generate a key pair for the first user, store the user and public key in one file, and store the user and the encrypted private key in another file
 				Hashtable <String, PublicKey> user_publicKeys = new Hashtable <String, PublicKey>();
 				KeyPairGenerator kpg = KeyPairGenerator.getInstance("RSA", "BC");

@@ -223,6 +223,14 @@ public class GroupClient extends Client implements GroupClientInterface {
 							}
 					}
 				}
+				else
+				{
+					int t_received = (Integer)plaintext.getObjContents().get(0);
+					if(t_received != t)
+					{
+						System.out.println("The message is replayed/reordered.");
+					}
+				}
 			}										
 			//System.out.printf("Server response msg: %s\n", response.getMessage());
 			//Successful response
@@ -302,6 +310,15 @@ public class GroupClient extends Client implements GroupClientInterface {
 						}
 					}
 				}
+				else
+				{
+					int t_received = (Integer)plaintext.getObjContents().get(0);
+					if(t_received != t)
+					{
+						System.out.println("The message is replayed/reordered.");
+					}
+				}
+
 			}
 			t++;
 			return null;
@@ -366,6 +383,14 @@ public class GroupClient extends Client implements GroupClientInterface {
 							return true;
 						}
 						else
+						{
+							System.out.println("The message is replayed/reordered.");
+						}
+					}
+					else
+					{
+						int t_received = (Integer)plaintext.getObjContents().get(0);
+						if(t_received != t)
 						{
 							System.out.println("The message is replayed/reordered.");
 						}
@@ -438,6 +463,14 @@ public class GroupClient extends Client implements GroupClientInterface {
 							System.out.println("The message is replayed/reordered.");
 						}
 					}
+					else
+					{
+						int t_received = (Integer)plaintext.getObjContents().get(0);
+						if(t_received != t)
+						{
+							System.out.println("The message is replayed/reordered.");
+						}
+					}
 				}
 				t++;
 				return false;
@@ -501,6 +534,14 @@ public class GroupClient extends Client implements GroupClientInterface {
 							return true;
 						}
 						else
+						{
+							System.out.println("The message is replayed/reordered.");
+						}
+					}
+					else
+					{
+						int t_received = (Integer)plaintext.getObjContents().get(0);
+						if(t_received != t)
 						{
 							System.out.println("The message is replayed/reordered.");
 						}
@@ -572,6 +613,14 @@ public class GroupClient extends Client implements GroupClientInterface {
 							System.out.println("The message is replayed/reordered.");
 						}
 					}
+					else
+					{
+						int t_received = (Integer)plaintext.getObjContents().get(0);
+						if(t_received != t)
+						{
+							System.out.println("The message is replayed/reordered.");
+						}
+					}
 				}
 				t++;
 				return false;
@@ -637,6 +686,14 @@ public class GroupClient extends Client implements GroupClientInterface {
 					else
 					{
 						System.out.println("The message is replayed/reordered.");
+					}
+				}
+				else
+				{
+					int t_received = (Integer)plaintext.getObjContents().get(0);
+					if(t_received != t)
+					{
+							System.out.println("The message is replayed/reordered.");
 					}
 				}
 			}
@@ -707,6 +764,14 @@ public class GroupClient extends Client implements GroupClientInterface {
 							System.out.println("The message is replayed/reordered.");
 						}
 					}
+					else
+					{
+						int t_received = (Integer)plaintext.getObjContents().get(0);
+						if(t_received != t)
+						{
+							System.out.println("The message is replayed/reordered.");
+						}
+					}
 				}
 				t++;
 				return false;
@@ -771,6 +836,14 @@ public class GroupClient extends Client implements GroupClientInterface {
 							return true;
 						}
 						else
+						{
+							System.out.println("The message is replayed/reordered.");
+						}
+					}
+					else
+					{
+						int t_received = (Integer)plaintext.getObjContents().get(0);
+						if(t_received != t)
 						{
 							System.out.println("The message is replayed/reordered.");
 						}
@@ -853,6 +926,14 @@ public class GroupClient extends Client implements GroupClientInterface {
 						}
 					}
 				}
+				else
+				{
+						int t_received = (Integer)plaintext.getObjContents().get(0);
+						if(t_received != t)
+						{
+							System.out.println("The message is replayed/reordered.");
+						}
+				}
 			}
 			t++;
 			return null;
@@ -931,6 +1012,14 @@ public class GroupClient extends Client implements GroupClientInterface {
 						}
 					}
 				}
+				else
+				{
+						int t_received = (Integer)plaintext.getObjContents().get(0);
+						if(t_received != t)
+						{
+							System.out.println("The message is replayed/reordered.");
+						}
+				}
 			}
 			t++;
 			return null;
@@ -964,13 +1053,83 @@ public class GroupClient extends Client implements GroupClientInterface {
 	}
 
 	public Hashtable<String, PublicKey> lUserRequests(UserToken token) {
-		Envelope message = new Envelope("LREQS");
-		message.addObject((Integer)t);
-		t++;
-		message.addObject(token);
-		sendEncryptedWithHMAC(message);
-		return new Hashtable<String, PublicKey>(); //TODO
-		
+		try
+		{
+			Envelope response = null;
+			Envelope message = new Envelope("LREQS");
+			message.addObject((Integer)t);
+			t++;
+			message.addObject(token);
+			
+			Mac mac = Mac.getInstance("HmacSHA256", "BC");
+			mac.init(identity_key);
+
+			Envelope to_be_sent = new Envelope("REQ");
+													
+			Cipher object_cipher = Cipher.getInstance("AES/CBC/PKCS5Padding", "BC");
+			object_cipher.init(Cipher.ENCRYPT_MODE, AES_key);
+									
+			SealedObject hmac_msg_sealed = new SealedObject(message, object_cipher);
+			to_be_sent.addObject(hmac_msg_sealed);
+														
+			byte[] rawHamc = mac.doFinal(convertToBytes(hmac_msg_sealed));
+			to_be_sent.addObject(rawHamc);
+
+			output.reset();
+			output.writeObject(to_be_sent);
+			output.flush();
+			output.reset();
+
+			//Get the response from the server
+			response = (Envelope)input.readObject();
+			
+			byte[] msg_combined_encrypted = convertToBytes((SealedObject)response.getObjContents().get(0));
+			mac = Mac.getInstance("HmacSHA256", "BC");
+			mac.init(identity_key);
+			byte[] rawHamc_2 = mac.doFinal(msg_combined_encrypted);
+			byte[] Hmac_passed = (byte[])response.getObjContents().get(1);
+			if(Arrays.equals(rawHamc_2, Hmac_passed))
+			{
+				Envelope plaintext = (Envelope)((SealedObject)response.getObjContents().get(0)).getObject(AES_key);
+				if((plaintext.getMessage()).equals("OK"))
+				{
+					//If there is a token in the Envelope, return it 
+					ArrayList<Object> temp = plaintext.getObjContents();
+				
+					if(temp != null && temp.size() == 2)
+					{
+						int t_received = (Integer)plaintext.getObjContents().get(0);
+						if(t_received == t)
+						{
+							Hashtable<String, PublicKey> request_table = (Hashtable<String, PublicKey>)plaintext.getObjContents().get(1);
+							t++;
+							return request_table;
+						}
+						else
+						{
+							System.out.println("The message is replayed/reordered.");
+						}
+					}
+				}
+				else
+				{
+					int t_received = (Integer)plaintext.getObjContents().get(0);
+					if(t_received != t)
+					{
+							System.out.println("The message is replayed/reordered.");
+					}
+				}
+			}
+			t++;
+			return null;
+		}
+		catch(Exception e)
+		{
+			System.err.println("Error: " + e.getMessage());
+			e.printStackTrace(System.err);
+			t++;
+			return null;
+		}		
 	}
 
 	 private byte[] convertToBytes(Object object){
@@ -987,55 +1146,5 @@ public class GroupClient extends Client implements GroupClientInterface {
     		System.out.println("Can't convert object to a byte array");
     		return null;
     	}
-	}
-
-	private void sendEncryptedWithHMAC(Envelope message) { 
-		try {
-			Mac mac = Mac.getInstance("HmacSHA256", "BC");
-			mac.init(identity_key);
-
-			Envelope to_be_sent = new Envelope("REQ");
-												
-			Cipher object_cipher = Cipher.getInstance("AES/CBC/PKCS5Padding", "BC");
-			object_cipher.init(Cipher.ENCRYPT_MODE, AES_key);
-								
-			SealedObject hmac_msg_sealed = new SealedObject(message, object_cipher);
-			to_be_sent.addObject(hmac_msg_sealed);
-													
-			byte[] rawHamc = mac.doFinal(convertToBytes(hmac_msg_sealed));
-			to_be_sent.addObject(rawHamc);
-
-			output.reset();
-			output.writeObject(to_be_sent);
-			output.flush();
-			output.reset();
-		} catch(Exception ex) {
-			System.err.println("Error in sending encrypted response (AES/HMAC): " + ex);
-		}
-	}
-	private Envelope recieveEncryptedWithHMAC() {
-		Envelope response  = null;
-		Envelope plaintext = null;
-		try {			
-			response = (Envelope)input.readObject();
-			byte[] msg_combined_encrypted = convertToBytes((SealedObject)response.getObjContents().get(0));
-			Mac mac = Mac.getInstance("HmacSHA256", "BC");
-			mac.init(identity_key);
-			byte[] rawHamc_2 = mac.doFinal(msg_combined_encrypted);
-			byte[] Hmac_passed = (byte[])response.getObjContents().get(1);
-			if(Arrays.equals(rawHamc_2, Hmac_passed)) {
-				plaintext = (Envelope)((SealedObject)response.getObjContents().get(0)).getObject(AES_key);
-				int t_received = (Integer)plaintext.getObjContents().get(0);
-				if(t_received == t) {
-					t++;
-				} else {
-					System.out.println("The message is replayed/reordered.");
-					disconnect();
-				}
-			}
-		} catch(Exception e) {
-			System.err.println("Error recieving an encrypted response (AES/HMAC): " + e);
-		}
-		return plaintext;
 	}
 }
