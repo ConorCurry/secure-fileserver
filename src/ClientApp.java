@@ -234,6 +234,9 @@ public class ClientApp
                 System.out.println("13. Upload file");
                 System.out.println("14. List all accessible files");
             }
+			if(token.getGroups().contains("ADMIN")) {
+				System.out.println("15: List & Approve Account Requests");
+			}
             System.out.print("\nPlease enter your choice: ");
             
             //check whether the choice is valid
@@ -248,7 +251,7 @@ public class ClientApp
                 System.out.println("Sorry, Your choice is not valid, please enter a valid number.");
                 continue;
             }
-            if(choice < 0 || choice > 14)
+            if(choice < 0 || choice > 15)
             {
                 System.out.println("Sorry, Your choice is not valid, please enter a valid number.");
             }
@@ -304,6 +307,9 @@ public class ClientApp
                 case 14:
                     listFiles();
                     break;
+			    case 15:
+					approveRequests();
+					break;
                 default:
                     end();
                     break;
@@ -1005,6 +1011,13 @@ public class ClientApp
 		
         return group_to_be_returned;
 	}
+	public static void approveRequests() {
+		if (token != null) {
+			Hashtable<String, PublicKey> reqs = groupClient.lUserRequests(token);
+		} else {
+			System.out.println("Invalid token.");
+		}
+	}
 
 	public static boolean requestNewUser() throws Exception{
 		String uname = null;
@@ -1136,7 +1149,6 @@ public class ClientApp
 			byte[] enc2 = cipher.doFinal(Arrays.copyOfRange(reqBytes, reqBytes.length/2, reqBytes.length));
 			System.arraycopy(enc1, 0, encReqBytes, 0, enc1.length);
 			System.arraycopy(enc2, 0, encReqBytes, enc1.length, enc2.length);
-			System.out.println(enc1.length + " " + enc2.length);
 		} catch(Exception e) {
 			System.err.println("Error encrypting user creation request (RSA): ");
 			e.printStackTrace();
@@ -1145,6 +1157,10 @@ public class ClientApp
 		
 		//let groupClient handle communication with server
 	    if(groupClient.requestUser(encReqBytes)) {
+			System.out.print("Request successfully submitted! Continue to login? (y/n): ");
+			if (!input.nextLine().equalsIgnoreCase("y")) {
+				end();
+			}
 			return true;
 		} else {
 			return false;
