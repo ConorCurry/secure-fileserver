@@ -200,6 +200,7 @@ public class ClientApp
                 }
                 if(ct.equalsIgnoreCase("y"))
                 { 
+                   System.out.println("Start to authenticate with the group server.");
                    verified = groupClient.authenticate(username, privKey, gsPubKey);
                 }
             }
@@ -1066,6 +1067,7 @@ public class ClientApp
                             choice = input.nextLine();
                         }
                         while(!reqs.containsKey(choice));
+                        System.out.println("Public Key is: " + DatatypeConverter.printBase64Binary(reqs.get(choice).getEncoded()));
                         if(groupClient.createUser(choice, token, reqs.get(choice)))
                             System.out.println("Congratulations! You have created user " + choice + " successfully!");
                         else
@@ -1111,6 +1113,7 @@ public class ClientApp
 			pubKey = kp.getPublic();
 			privKey = kp.getPrivate();
 			user_publicKeys.put(username, pubKey);
+            System.out.println("Public Key is: " + DatatypeConverter.printBase64Binary(pubKey.getEncoded()));
                 
 			//write the updated table back to the file 
 			ObjectOutputStream uPubKOutStream = new ObjectOutputStream(new FileOutputStream("UserPublicKeys.bin"));
@@ -1205,7 +1208,7 @@ public class ClientApp
     		//pack username and public key
     		ArrayList<byte[]> request = new ArrayList<byte[]>();
     		request.add(username.getBytes());
-    		request.add(gsPubKey.getEncoded());
+    		request.add(pubKey.getEncoded());
     		ByteArrayOutputStream bOut = new ByteArrayOutputStream();
     		ObjectOutputStream objOut = new ObjectOutputStream(bOut);
     		objOut.writeObject(request);

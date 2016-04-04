@@ -14,6 +14,7 @@ import java.security.spec.X509EncodedKeySpec;
 import javax.xml.bind.DatatypeConverter;
 import javax.crypto.spec.IvParameterSpec;
 import java.nio.ByteBuffer;
+import javax.xml.bind.DatatypeConverter;
 
 
 public class GroupThread extends Thread 
@@ -103,7 +104,7 @@ public class GroupThread extends Thread
 			System.out.println("receive message from client");
 			Envelope response_a = null; //the response for authentication 
 
-			boolean authOrNot = true;
+			boolean authOrNot = true; //did we authenticate already?
 		    if(first_message.getMessage().equals("GetPubKey"))
 		    {
 		    	Envelope rsp = null;
@@ -162,11 +163,10 @@ public class GroupThread extends Thread
 						    	sig.update((byte[])temp.get(2));
 						    	byte[] to_be_verified = (byte[])temp.get(3);
 						    	boolean verified = sig.verify(to_be_verified);
-						
+								
 								//if matches, decrypts to get the AES key, generate a new number and encrypt that with user's public key 
 						    	if(verified)
 						    	{
-
 										response_a = new Envelope("OK");
 
 										//Get the user generated number and add its hashed value to message 
@@ -209,12 +209,14 @@ public class GroupThread extends Thread
 							}
 							else
 							{  
+								System.out.println("The user does not exist");
 								response_a = new Envelope("FAIL");
 							}
 						}
 						else
 						{	
 							response_a = new Envelope("FAIL");
+							System.out.println("Wrong number of objects");
 						}
 
 						output.writeObject(response_a);
@@ -237,7 +239,6 @@ public class GroupThread extends Thread
 						}	
 						else
 						{
-						
 							Envelope second_message = (Envelope)input.readObject();
 							byte[] to_be_verified = (byte[])second_message.getObjContents().get(0); //get the hashed number decrypted by the user 
 							
@@ -1188,7 +1189,7 @@ public class GroupThread extends Thread
 				}
 				else
 				{
-					boolean success =  my_gs.userList.addUser(username, to_be_added); //returns true if successful
+					boolean success = my_gs.userList.addUser(username, to_be_added); //returns true if successful
 					if(success)
 					{
 						//remove the pending requests
