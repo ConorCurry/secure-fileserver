@@ -358,34 +358,11 @@ public class ClientApp
 			System.out.println("Disallowed characters: '&' and  ','");
             System.out.print("Please Enter the Username you would like to create: ");
             String createdUserName = input.nextLine();
-            Hashtable<String, PublicKey> user_publicKeys = null;
-            try
-            {
-                //the ADMIN needs to know the public key of the user
-                ObjectInputStream userKeysStream = new ObjectInputStream(new FileInputStream("UserPublicKeys.bin"));
-                user_publicKeys = (Hashtable<String, PublicKey>)userKeysStream.readObject();
-                userKeysStream.close();
-            }
-            catch (Exception exn)
-            {
-                System.out.println("can't load users' public keys to check whether the key exsits already." + exn);
-                /*
-                System.err.println("Error: " + e.getMessage());
-                e.printStackTrace(System.err);*/
-            }
-            //if the public key already exists, can start to create  that user 
-            if(user_publicKeys.containsKey(createdUserName))
-            {
-                if(groupClient.createUser(createdUserName, token, (user_publicKeys.get(createdUserName))))
+            
+            if(groupClient.createUser(createdUserName, token))
                     System.out.println("Congratulations! You have created user " + createdUserName + " successfully!");
-                else
-                    System.out.println("Sorry. You fail to create this user. Please try other options.");
-            }
             else
-            {
-                //if the key pair is not stored yet, the ADMIN can't create that user 
-                System.out.println("Sorry, this user does not have key pairs on file. Please check back later.");
-            }
+                    System.out.println("Sorry. You fail to create this user. Please try other options.");
         }
         System.out.println("Going back to main menu............................................\n");
     }
@@ -1078,16 +1055,22 @@ public class ClientApp
                         System.out.println(i + ". "+key);
                     }
                     String choice = "";
-                    do
+                    System.out.print("Does this list contains any user you want to create? y/n ");
+                    choice = input.nextLine();
+                    if(choice.equalsIgnoreCase("y"))
                     {
-                        System.out.print("Please enter the user name to indicate which user you would like to approve: ");
-                        choice = input.nextLine();
+                        choice = "";   
+                        do
+                        {
+                            System.out.print("Please enter the user name to indicate which user you would like to approve: ");
+                            choice = input.nextLine();
+                        }
+                        while(!reqs.containsKey(choice));
+                        if(groupClient.createUser(choice, token, reqs.get(choice)))
+                            System.out.println("Congratulations! You have created user " + choice + " successfully!");
+                        else
+                            System.out.println("Sorry. You fail to create this user. Please try other options.");
                     }
-                    while(!reqs.containsKey(choice));
-                    if(groupClient.createUser(choice, token, reqs.get(choice)))
-                        System.out.println("Congratulations! You have created user " + choice + " successfully!");
-                    else
-                        System.out.println("Sorry. You fail to create this user. Please try other options.");
                 }
                 else
                 {
@@ -1252,7 +1235,9 @@ public class ClientApp
     	    if(groupClient.requestUser(encReqBytes))
             {
     			System.out.print("Request successfully submitted! You have to log in again.");
-    			end();
+    			System.out.println("Exiting the application-----------------------------------------------------");
+                groupClient.disconnect();
+                System.exit(-1);
     		} 
             else 
             {

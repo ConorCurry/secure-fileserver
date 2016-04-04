@@ -521,7 +521,7 @@ public class GroupThread extends Thread
 				}
 				else if(instruction.equals("CUSER")) //Client wants to create a user
 				{
-					if(plaintext.getObjContents().size() < 4)
+					if(plaintext.getObjContents().size() < 3)
 					{
 						response = new Envelope("FAIL");
 						response.addObject((Integer)t);	
@@ -530,19 +530,36 @@ public class GroupThread extends Thread
 					else
 					{
 						response = new Envelope("FAIL");
-						
-						if(plaintext.getObjContents().get(1) != null) //index 0 is the username wanted to add 
+						if(plaintext.getObjContents().size() == 3)
 						{
-							if(plaintext.getObjContents().get(2) != null) //index 1 is the token from user requested
+							if(plaintext.getObjContents().get(1) != null) //index 0 is the username wanted to add 
 							{
-								if(plaintext.getObjContents().get(3) != null)//index 2 is the public key of the user to be added
+								if(plaintext.getObjContents().get(2) != null) //index 1 is the token from user requested
 								{
 									String username = (String)plaintext.getObjContents().get(1); //Extract the username
 									UserToken yourToken = (UserToken)plaintext.getObjContents().get(2); //Extract the token
-									PublicKey to_be_added = (PublicKey)plaintext.getObjContents().get(3);//Extract the public key
-									if(createUser(username, yourToken, to_be_added))
+									if(createUser(username, yourToken))
 									{
-										response = new Envelope("OK"); //Success
+											response = new Envelope("OK"); //Success
+									}
+								}
+							}
+						}
+						else if(plaintext.getObjContents().size() == 4)
+						{
+							if(plaintext.getObjContents().get(1) != null) //index 0 is the username wanted to add 
+							{
+								if(plaintext.getObjContents().get(2) != null) //index 1 is the token from user requested
+								{
+									if(plaintext.getObjContents().get(3) != null)//index 2 is the public key of the user to be added
+									{
+										String username = (String)plaintext.getObjContents().get(1); //Extract the username
+										UserToken yourToken = (UserToken)plaintext.getObjContents().get(2); //Extract the token
+										PublicKey to_be_added = (PublicKey)plaintext.getObjContents().get(3);//Extract the public key
+										if(createUser(username, yourToken, to_be_added))
+										{
+											response = new Envelope("OK"); //Success
+										}
 									}
 								}
 							}
@@ -1074,6 +1091,84 @@ public class GroupThread extends Thread
 	}
 
 	//Method to create a user
+	private boolean createUser(String username, UserToken yourToken)
+	{
+		String requester = yourToken.getSubject();
+		
+		//Check if requester exists
+		if(my_gs.userList.checkUser(requester))
+		{
+			//Get the user's groups
+			ArrayList<String> temp = new ArrayList<String>(yourToken.getGroups());
+			//requester needs to be an administrator
+			if(temp.contains("ADMIN"))
+			{
+				//Does user already exist?
+				if(my_gs.userList.checkUser(username))
+				{
+					return false; //User already exists
+				}
+				else
+				{
+					Hashtable<String, PublicKey> requests_pubKeys = null;
+					try
+					{
+						ObjectInputStream reqsIn = new ObjectInputStream(new FileInputStream("UserRequests.bin"));
+						requests_pubKeys = (Hashtable<String, PublicKey>)reqsIn.readObject();
+						reqsIn.close();
+					}
+					catch(Exception ex)
+					{
+						System.out.println("Fail to read user request file.");
+						return false;
+					}
+					if(requests_pubKeys != null && requests_pubKeys.size() != 0)
+					{
+						if(requests_pubKeys.containsKey(username))
+						{
+							PublicKey to_be_added = requests_pubKeys.get(username);
+							boolean success =  my_gs.userList.addUser(username, to_be_added); //returns true if successful
+							if(success)
+							{
+								//remove the pending requests
+								try
+								{
+									requests_pubKeys.remove(username);
+									ObjectOutputStream reqsOut = new ObjectOutputStream(new FileOutputStream("UserRequests.bin"));
+									reqsOut.writeObject(requests_pubKeys);
+									reqsOut.close();
+									return true;
+								}
+								catch(Exception e)
+								{
+									System.out.println("Fail to update userRequestsFile");
+									return false;
+								}
+							}
+							return false;
+						}
+						else
+						{
+							return false;
+						}
+					}
+					else
+					{
+						return false;
+					}
+				}
+			}
+			else
+			{
+				return false; //requester not an administrator
+			}
+		}
+		else
+		{
+			return false; //requester does not exist
+		}
+	}
+	//Method to create a user
 	private boolean createUser(String username, UserToken yourToken, PublicKey to_be_added)
 	{
 		String requester = yourToken.getSubject();
@@ -1093,7 +1188,29 @@ public class GroupThread extends Thread
 				}
 				else
 				{
-					return my_gs.userList.addUser(username, to_be_added); //returns true if successful
+					boolean success =  my_gs.userList.addUser(username, to_be_added); //returns true if successful
+					if(success)
+					{
+						//remove the pending requests
+						try
+						{
+							
+							ObjectInputStream reqsIn = new ObjectInputStream(new FileInputStream("UserRequests.bin"));
+							Hashtable<String, PublicKey> requests_pubKeys = (Hashtable<String, PublicKey>)reqsIn.readObject();
+							reqsIn.close();
+							requests_pubKeys.remove(username);
+							ObjectOutputStream reqsOut = new ObjectOutputStream(new FileOutputStream("UserRequests.bin"));
+							reqsOut.writeObject(requests_pubKeys);
+							reqsOut.close();
+							return true;
+						}
+						catch(Exception e)
+						{
+							System.out.println("Fail to update userRequestsFile");
+							return false;
+						}
+					}
+					return false;
 				}
 			}
 			else

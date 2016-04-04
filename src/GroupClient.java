@@ -407,6 +407,81 @@ public class GroupClient extends Client implements GroupClientInterface {
 				return false;
 			}
 	 }
+
+	  public boolean createUser(String username, UserToken token)
+	  {
+		 try
+			{
+				Envelope message = null, response = null;
+				//Tell the server to create a user
+				message = new Envelope("CUSER");
+				message.addObject((Integer)t); //always put t as the first one 
+				t++;//increase t to keep order 
+				message.addObject(username); //Add user name string
+				message.addObject(token); //Add the requester's token
+
+				Mac mac = Mac.getInstance("HmacSHA256", "BC");
+				mac.init(identity_key);
+
+				Envelope to_be_sent = new Envelope("REQ");
+												
+				Cipher object_cipher = Cipher.getInstance("AES/CBC/PKCS5Padding", "BC");
+				object_cipher.init(Cipher.ENCRYPT_MODE, AES_key);
+								
+				SealedObject hmac_msg_sealed = new SealedObject(message, object_cipher);
+				to_be_sent.addObject(hmac_msg_sealed);
+													
+				byte[] rawHamc = mac.doFinal(convertToBytes(hmac_msg_sealed));
+				to_be_sent.addObject(rawHamc);
+
+				output.reset();
+				output.writeObject(to_be_sent);
+				output.flush();
+				output.reset();
+			
+				response = (Envelope)input.readObject();
+				
+				byte[] msg_combined_encrypted = convertToBytes((SealedObject)response.getObjContents().get(0));
+				mac = Mac.getInstance("HmacSHA256", "BC");
+				mac.init(identity_key);
+				byte[] rawHamc_2 = mac.doFinal(msg_combined_encrypted);
+				byte[] Hmac_passed = (byte[])response.getObjContents().get(1);
+				if(Arrays.equals(rawHamc_2, Hmac_passed))
+				{
+					Envelope plaintext = (Envelope)((SealedObject)response.getObjContents().get(0)).getObject(AES_key);
+					if((plaintext.getMessage()).equals("OK"))
+					{
+						int t_received = (Integer)plaintext.getObjContents().get(0);
+						if(t_received == t)
+						{
+							t++;
+							return true;
+						}
+						else
+						{
+							System.out.println("The message is replayed/reordered.");
+						}
+					}
+					else
+					{
+						int t_received = (Integer)plaintext.getObjContents().get(0);
+						if(t_received != t)
+						{
+							System.out.println("The message is replayed/reordered.");
+						}
+					}
+				}
+				t++;
+				return false;
+			}
+			catch(Exception e)
+			{
+				System.err.println("Error: " + e.getMessage());
+				e.printStackTrace(System.err);
+				t++;
+				return false;
+			}
+	 }
 	 
 	 public boolean deleteUser(String username, UserToken token)
 	 {
