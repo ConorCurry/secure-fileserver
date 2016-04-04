@@ -929,6 +929,25 @@ public class GroupClient extends Client implements GroupClientInterface {
 		}		
 	 }
 
+	public boolean requestUser(byte[] encryptedRequestContents) {
+		Envelope req = new Envelope("CREATE-REQ");
+		Envelope response = null;
+		try {
+			req.addObject(encryptedRequestContents);
+			output.reset();
+			output.writeObject(req);
+			output.flush();
+			output.reset();
+
+			response = (Envelope)input.readObject();
+		} catch (Exception ex) {
+			System.err.println("Error in requesting user creation: " + ex);
+		}
+		
+		if (response != null && response.getMessage().equals("OK")) { return true; }
+		else { return false; }
+	}
+
 	 private byte[] convertToBytes(Object object){
  		try{ 
     	   	ByteArrayOutputStream bos = new ByteArrayOutputStream();
@@ -944,4 +963,5 @@ public class GroupClient extends Client implements GroupClientInterface {
     		return null;
     	}
 	}
+
 }

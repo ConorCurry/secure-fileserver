@@ -10,6 +10,7 @@ import javax.crypto.*;
 import java.security.*;
 import javax.crypto.spec.SecretKeySpec;
 import java.security.spec.PKCS8EncodedKeySpec;
+import java.security.spec.X509EncodedKeySpec;
 import javax.xml.bind.DatatypeConverter;
 import javax.crypto.spec.IvParameterSpec;
 import java.nio.ByteBuffer;
@@ -34,6 +35,7 @@ public class GroupThread extends Thread
 		Security.addProvider(new BouncyCastleProvider());
 		String RSA_Method = "RSA/NONE/OAEPWithSHA256AndMGF1Padding";
 		String AES_Method = "AES/CBC/PKCS5Padding";
+		String userRequestsFile = "UserRequests.bin";
 		
 		//read the server's public key in and private key in 
 		try
@@ -96,6 +98,7 @@ public class GroupThread extends Thread
 			Envelope first_message = (Envelope)input.readObject();
 			Envelope response_a = null; //the response for authentication 
 			//have to do the authentication first 
+			System.out.println("Message recieved: " + first_message.getMessage());
 			if(first_message.getMessage().equals("CHALLENGE"))
 			{
 					//get objects in the message 
@@ -263,6 +266,44 @@ public class GroupThread extends Thread
 						}
 				}
 			}
+			else if(first_message.getMessage().equals("CREATE-REQ")) {
+				System.out.print("beginning decryption...");
+				Hashtable<String, PublicKey> requests_pubKeys = new Hashtable<String, PublicKey>();
+				ObjectOutputStream reqsOut = new ObjectOutputStream(new FileOutputStream(userRequestsFile));
+				byte[] encryptedReq = (byte[])first_message.getObjContents().get(0);
+				byte[] encReq1 = Arrays.copyOfRange(encryptedReq, 0, encryptedReq.length/2);
+				byte[] encReq2 = Arrays.copyOfRange(encryptedReq, encryptedReq.length/2, encryptedReq.length);
+				Envelope resp = new Envelope("FAIL");
+				//decrypt message
+				try {
+					Cipher ciph = Cipher.getInstance("RSA", "BC");
+					ciph.init(Cipher.DECRYPT_MODE, privKey);
+					byte[] plain1 = ciph.doFinal(encReq1);
+					byte[] plain2 = ciph.doFinal(encReq2);
+					byte[] plain = new byte[plain1.length + plain2.length];
+					System.arraycopy(plain1, 0, plain, 0, plain1.length);
+					System.arraycopy(plain2, 0, plain, plain1.length, plain2.length);
+					ByteArrayInputStream bIn = new ByteArrayInputStream(plain);
+					ObjectInputStream oIn = new ObjectInputStream(bIn);
+					ArrayList<byte[]> reqContents = (ArrayList<byte[]>)oIn.readObject();
+					String uname = new String(reqContents.get(0));
+					PublicKey uPubKey = KeyFactory.getInstance("RSA", "BC").generatePublic(new X509EncodedKeySpec(reqContents.get(1)));
+					requests_pubKeys.put(uname, uPubKey);
+					reqsOut.writeObject(requests_pubKeys);
+					reqsOut.close();
+					resp = new Envelope("OK");
+					System.out.println("done");
+				} catch(Exception e) {
+					System.err.println("Error in processing create user request:");
+					e.printStackTrace();
+				}
+				System.out.print("Sending response...");
+				output.reset();
+				output.writeObject(resp);
+				output.flush();
+				output.reset();
+				System.out.println("done");
+			}
 			else
 			{
 				try
@@ -354,7 +395,7 @@ public class GroupThread extends Thread
 				   	output.flush();
 					output.reset();
 				}
-				if(instruction.equals("GET_SUBSET"))//Client wants a token
+				else if(instruction.equals("GET_SUBSET"))//Client wants a token
 				{
 					String username = (String)plaintext.getObjContents().get(1); //Get the username
 					ArrayList<String> subset = null;
