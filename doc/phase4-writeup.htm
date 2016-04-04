@@ -92,19 +92,28 @@ your group has decided to use to address threats T5–T7.</p>
       <h2>Discussion</h2>
 <!-- BEGIN CHANGES HERE -->
 
-<p>Conclude with a paragraph or two discussing the interplay between your
-proposed mechanisms, and commenting on the design process that your group
-followed. Did you discuss other ideas that didn’t pan out before settling on the
-above-documented approach? Did you end up designing a really interesting
-protocol suite that addresses multiple threats at once? Use this space to show
-off your hard work!</p>
+<p>Proposing proper mechanisms for this phase was harder than we thought. We got stuck on the degree that we should trust file server to implement and thought the file server could not do anything except storing files. But later, during the discussion with Dr. Garrison, we realized that we should trust file server in some degree if the file server is willing to act properly.</p>
 
-<p>Finally, spend about one paragraph convincing me that your modified protocols
-still address the threats T1–T4 described in Phase 3 of the project.</p>
+<p>For our first draft of mechanisms, we were struggling on how to do threat 6. The first idea we came up with was to encrypt the file again and again if there was any new key added into the key list. And we did lots of research on how to encrypt additively, but there were only papers and no implementation available. Also, to download all the files, encrypt them with the new key, and upload them to the file server are really expensive if there are lots of files stored on the file server. In the end, we decided to encrypt the file with only one key (the newest key in the list), and decrypt that file with the associated key. This method brings some trade-off: it’s cheap and easy to be implemented.  However, we have to decide the period of expiration to prevent the deleted user from re-using the token to upload files.  It was also hard to decide what would be a good time expiration between the usability and security. In order to protect the usability, we decided to do all the operations behind the scene: once the token expires, the application will request a new token automatically. If that automatic request fails because the user is deleted from the group server, the user will be forced to quit the application. This behind-scene operation provides the usability and also security at the same time, which is an interesting feature in our protocol.
+</p>
 
-<p>When the user first connects to a server, the server will send the public keys to the user first. The user will save the name of the server and port number, along with the public keys, on file. If the user attempts to connect to the next server on time, he/she will look into the file and fetch the public key to connect to the server directly.</p>
+<h3>Phase 3 revisited:</h3>
+<h4>Threat 1: Unauthorized Token Issuance</h4>
+None of threat 5- 7 changes the mutual authentication between the group server and client. Even though hmac is added to the process of exchanging messages, the mutual authentication has to be done before any communication starts.  That mutual authentication ensures the token to be issued to proper users. Actually, protocol 5 enhances the security of communication between the group server and the client, by preventing the message re-order, replay, and modification. Protocol 6 issues a new type of token that contains a list of secret keys to encrypt and decrypt files, encrypt/decrypt files with a proper key locally, and add time-out to tokens. None of those operations changes the mutual authentication between the group server and client. Threat 7 only adds another new type of token, which does not change the mutual authentication either.</p>
+
+<h4>Threat 2: Token Modification/Forgery</h4>
+Even though, in threat 6 and 7, two more types of token are added. But the protocol 2 is still implemented on the tokens: every time a token is issued, all the fields of that token are concatenated and signed by the group server’s public key. When the file server receives a request, the verification of that digital signature will be implemented. If anything is changed to the fields, the verification will fail, and it ensures that every token is issued by the group server ad was not modified after issuance.
+</p>
+
+
+<h3>Extra Credits:</h3>
+<p>In this phase, we made some adjustment to make the communication between clients and servers more dynamically. In the previous phase, we assume that all the public keys are available on the website, and users/servers need to check the website to fetch the public key.</p>
+
+<p>Now, the assumption is that the public keys are still on the website, and users can check the public key he/she receives on that website. However, the process of getting server’s public key changed.</p>
+
+<p>When the user first connects to a server, the server will send the public keys to the user first. The client needs to choose whether he/she wants to accept that public key, by checking the public key posted on the website. If the user chooses to accept that key, the user will save the name of the server and port number, along with the public key, on file. If the user attempts to connect to the same server next time, he/she will look into the saved file and fetch the public key to connect to the server directly.</p>
  
-<p>In order to support the dynamic adding of users, we will add a feature of “pending requests” for the group server. When a user wants to be created, the user will create his/her RSA key pairs and share it to the group server. This communication will be called “To_be_Created”. Once the group serve receives the request and the user’s username and the public key, it will close the connection, stores the user’s name and public key in a list to be approved by the ADMIN. When the ADMIN wants to create a user, he/she will look into the list to check whether this user sends the request or now. If the request exists, the ADMIN will create that user and add it to the userList.</p>
+<p>In order to support the dynamic adding of users, we will add a feature of “pending requests” for the group server. When a user wants to be created, the user will create his/her RSA key pairs and share the public key to the group server. This communication will be called “To_be_Created”. Once the group serve receives the request containing the user’s username and the public key, it will close the connection, stores the user’s name and public key in a list to be approved by the ADMIN. When the ADMIN wants to create a user, he/she will look into the list to check whether this user sends the request or now. If the request exists, the ADMIN will create that user and add it to the userList.</p>
 
 <!-- END CHANGES HERE -->
     </section>
