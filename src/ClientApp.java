@@ -161,10 +161,72 @@ public class ClientApp
                 privKey = kf.generatePrivate(new PKCS8EncodedKeySpec(decrypted_data));
             }
             boolean verified = false;
+            boolean getKey = true;
+            String ct = "";
             if(existed)
             {
-                //authenticate process to check whether the authentication succeeds. 
-               verified = groupClient.authenticate(username, privKey);
+                //authenticate process to check whether the authentication succeeds.
+                 PublicKey gsPubKey = null;
+            
+                 //look into file server's public key
+                 ArrayList<PublicKey> gs_pubKeys = null;
+                 try
+                 {
+                    FileInputStream fis = new FileInputStream("GSPublicKey_client.bin");
+                    ObjectInputStream fileStream = new ObjectInputStream(fis);
+                    gs_pubKeys = (ArrayList<PublicKey>)fileStream.readObject();
+                    if(gs_pubKeys != null && gs_pubKeys.size() == 1)
+                    {
+                        //go to group server to request token to connect to the file server 
+                        gsPubKey = gs_pubKeys.get(0);
+                        if(gsPubKey != null)
+                        {
+                            getKey = false;
+                            ct = "y";
+                        }
+                    }
+                }
+                catch(Exception e)
+                {
+                    //create a file contains file server public keys
+                    //request public key 
+                    //do nothing here 
+                }
+                //if we need to get a key from group server
+                if(getKey)
+                {
+                    System.out.println("Getting key from group server");
+                    gsPubKey = groupClient.getGSkey();
+                    if(gsPubKey == null)
+                    {
+                        System.out.println("Fail to get Group Server's publc key.");
+                    }
+                    else
+                    {
+                        gs_pubKeys = new ArrayList<PublicKey>();
+
+                        gs_pubKeys.add(gsPubKey);
+                        //write server's public key to a file 
+                        try
+                        {
+                            ObjectOutputStream sPubKOutStream = new ObjectOutputStream(new FileOutputStream("GSPublicKey_client.bin"));
+                            sPubKOutStream.writeObject(gs_pubKeys);
+                            sPubKOutStream.close();
+                             //print public key out for user to verify 
+                            System.out.println("RSA Key is: " + DatatypeConverter.printBase64Binary(gsPubKey.getEncoded()));
+                            System.out.print("Do you want to continue? y/n: ");
+                            ct = input.nextLine();
+                        }
+                        catch(Exception e)
+                        {
+                            System.out.println("Fail to write it back");
+                        }
+                    }
+                }
+                if(ct.equalsIgnoreCase("y"))
+                { 
+                   verified = groupClient.authenticate(username, privKey, gsPubKey);
+                }
             }
             //if the authentication succeeds, then the user can use the AES key to acquire token 
             if(verified)
@@ -590,13 +652,15 @@ public class ClientApp
                 FileInputStream fis = new FileInputStream("FSPublicKey_client.bin");
                 ObjectInputStream fileStream = new ObjectInputStream(fis);
                 fs_pubKeys = (Hashtable<String, PublicKey>)fileStream.readObject();
-                System.out.println(fs_name + fs_port);
                 if(fs_pubKeys.containsKey(fs_name + fs_port))
                 {
                     //go to group server to request token to connect to the file server 
                     fsPubKey = fs_pubKeys.get(fs_name + fs_port);
-                    getKey = false;
-                    ct = "y";
+                    if(fsPubKey != null)
+                    {
+                        getKey = false;
+                        ct = "y";
+                    }
                 }
             }
             catch(Exception e)
@@ -627,7 +691,7 @@ public class ClientApp
                         sPubKOutStream.close();
                          //print public key out for user to verify 
                         System.out.println("RSA Key is: " + DatatypeConverter.printBase64Binary(fsPubKey.getEncoded()));
-                        System.out.println("Do you want to continue? y/n");
+                        System.out.print("Do you want to continue? y/n: ");
                         ct = input.nextLine();
                     }
                     catch(Exception e)
@@ -717,11 +781,21 @@ public class ClientApp
                     if(EDToken == null)
                     {
                         proceed = false;
+                        System.out.println("Sorry, you can't download file because you can't have the proper token.");
                     }
                 }
                 else
                 {
-                            //check time-out if time-out request again
+                    if(verfify_timeOut())
+                    {
+                        //if time out, request a new token
+                        EDToken = groupClient.getToken_fileOperation(username, new ArrayList<String>(token.getGroups()));
+                        if(EDToken == null)
+                        {
+                            proceed = false;
+                             System.out.println("Sorry, you can't download file because you can't have the proper token.");
+                        }
+                    }
                 }
                 if(proceed)
                 {
@@ -772,20 +846,17 @@ public class ClientApp
                     boolean proceed = true;
                     if(!grp.equals(""))
                     {
-        				if(EDToken == null)
+        				
+                        //request token from the group server - we always want the newest key list
+                        ArrayList<String> working_group = new ArrayList<String>();
+                        working_group.add(grp);
+                        EDToken = groupClient.getToken_fileOperation(username, working_group);
+
+                        if(EDToken == null || verfify_timeOut())
                         {
-                            //request token from the group server
-                            ArrayList<String> working_group = new ArrayList<String>();
-                            working_group.add(grp);
-                            EDToken = groupClient.getToken_fileOperation(username, working_group);
-                            if(EDToken == null)
-                            {
+                               //because the fresh token can never be time out
                                 proceed = false;
-                            }
-                        }
-                        else
-                        {
-                            //check time-out if time-out request again
+                                System.out.println("Sorry. You have no rights to upload file");
                         }
                         if(proceed)
                         {
@@ -996,4 +1067,13 @@ public class ClientApp
 		
         return group_to_be_returned;
 	}
+
+    public static boolean verfify_timeOut()
+    {
+        if((new Date()).getTime() - EDToken.getCreatedTime() < 600000)
+        {
+            return false;
+        }
+        return true;
+    }
 }

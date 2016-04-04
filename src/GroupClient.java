@@ -15,18 +15,33 @@ public class GroupClient extends Client implements GroupClientInterface {
 	 private static Key identity_key = null;
 	 private static int t = 0;
 
+	public PublicKey getGSkey()
+	{
+		try
+		{
+			Envelope message = new Envelope("GetPubKey");
+			output.writeObject(message);
+			System.out.println("send message to group server");
+
+			Envelope response = (Envelope)input.readObject();
+			System.out.println("get message to group server");
+			if(response.getMessage().equals("OK"))
+				return (PublicKey)response.getObjContents().get(0);
+			else
+				return null;
+		}
+		catch(Exception e)
+		{
+			System.err.println("Error getting PublicKey: " + e);
+			return null;
+		}
+	}
 	 //send the user name and challenge to the server 
-	 public boolean authenticate(String username, PrivateKey usrPrivKey)
+	 public boolean authenticate(String username, PrivateKey usrPrivKey, PublicKey serverPubkey)
 	 {
 	 	try
 	 	{
 	 		Security.addProvider(new BouncyCastleProvider());
-	 		//read in server's public key from the file storing server's public key 
-            FileInputStream kfis = new FileInputStream("ServerPublic.bin");
-            ObjectInputStream serverKeysStream = new ObjectInputStream(kfis);
-            PublicKey serverPubkey = ((ArrayList<PublicKey>)serverKeysStream.readObject()).get(0);
-            kfis.close();
-            serverKeysStream.close();
 
 	 		//genereate a 256-bit AES key for securely transmission
 	        KeyGenerator key = KeyGenerator.getInstance("AES", "BC");
