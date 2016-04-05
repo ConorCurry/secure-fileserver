@@ -1097,6 +1097,7 @@ public class ClientApp
                     for(String key: keys)
                     {
                         System.out.println(i + ". "+key);
+                        i++;
                     }
                     String choice = "";
                     System.out.print("Does this list contains any user you want to create? y/n ");
