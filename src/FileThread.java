@@ -2,21 +2,8 @@
 
 import java.lang.Thread;
 import java.net.*;
-<<<<<<< HEAD
-import java.util.List;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Hashtable;
-import java.io.File;
-import java.io.FileInputStream;
-import java.io.FileOutputStream;
-import java.io.ObjectInputStream;
-import java.io.ObjectOutputStream;
-import java.io.ByteArrayOutputStream;
-=======
 import java.util.*;
 import java.io.*;
->>>>>>> 1cb0378d0fd39c20bda838f8762c8f5d2023095c
 import org.bouncycastle.jce.provider.*;
 import javax.crypto.spec.IvParameterSpec;
 import javax.crypto.*;
@@ -35,14 +22,10 @@ public class FileThread extends Thread
 	private ObjectInputStream input;
 	private ObjectOutputStream output;
 	private PublicKey groupkey;
-<<<<<<< HEAD
 	private SecretKey identity_key;
 	private SecretKey symKey;
 	private static int t = 0;
-=======
 	private PrivateKey serverKey = null;
->>>>>>> 1cb0378d0fd39c20bda838f8762c8f5d2023095c
-
 	public FileThread(Socket _socket)
 	{
 		Security.addProvider(new BouncyCastleProvider());
