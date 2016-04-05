@@ -4,6 +4,7 @@ import java.lang.Thread;
 import java.net.*;
 import java.util.List;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Hashtable;
 import java.io.File;
 import java.io.FileInputStream;
@@ -16,6 +17,7 @@ import javax.crypto.spec.IvParameterSpec;
 import javax.crypto.*;
 import java.security.*;
 import java.security.spec.PKCS8EncodedKeySpec;
+import java.security.spec.X509EncodedKeySpec;
 import javax.crypto.spec.SecretKeySpec;
 import java.math.BigInteger;
 import java.util.Scanner;
@@ -28,6 +30,9 @@ public class FileThread extends Thread
 	private ObjectInputStream input;
 	private ObjectOutputStream output;
 	private PublicKey groupkey;
+	private SecretKey identity_key;
+	private SecretKey symKey;
+	private static int t = 0;
 
 	public FileThread(Socket _socket)
 	{
@@ -43,7 +48,7 @@ public class FileThread extends Thread
 			System.out.println("*** New connection from " + socket.getInetAddress() + " : " + socket.getPort() + "***");
 			input = new ObjectInputStream(socket.getInputStream());
 			output = new ObjectOutputStream(socket.getOutputStream());
-			SecretKey symKey = null;
+			symKey = null;
 		    Envelope msg = (Envelope)input.readObject();
 		    boolean authOrNot = false;
 		    if(msg.getMessage().equals("GetPubKey"))
@@ -70,12 +75,12 @@ public class FileThread extends Thread
 					rsp = new Envelope("FAIL");
 				}
 				output.writeObject(rsp);
-		    }
+				}
 		    if(proceed)
 		    {
 			    if(authOrNot)
 			    {	
-				    if ((symKey = authenticate()) == null) {
+				   if ((symKey = authenticate()) == null) {
 							socket.close();
 							proceed = false;
 							System.out.println("Auth failed, closing connection.");
@@ -394,6 +399,7 @@ public class FileThread extends Thread
 		PublicKey userKey = null;
 		Envelope challenge = null;
 		byte[] rand;
+		byte[] concat;
 		KeyGenerator keyGen = null;
 		try {
 			challenge = (Envelope)input.readObject();
@@ -441,34 +447,69 @@ public class FileThread extends Thread
 			return null;
 		}
 		//Stage1 -- handle receiving initial auth request
+		// try {
+		// 	cipher = Cipher.getInstance(RSA_METHOD, "BC");
+		// 	cipher.init(Cipher.DECRYPT_MODE, serverKey);
+		// 	//rand = cipher.doFinal( (byte[])challenge.getObjContents().get(0) );
+		// 	//userKey = (PublicKey)challenge.getObjContents().get(1);
+		// 	//concat = cipher.doFinal( (byte[])challenge.getObjContents().get(0) );
+		// 	int randLen = 8;
+		// 	rand = Arrays.copyOfRange(concat, 0, randLen);
+		// 	KeyFactory kf = KeyFactory.getInstance(RSA_METHOD, "BC");
+		// 	userKey = kf.generatePublic(new X509EncodedKeySpec(Arrays.copyOfRange(concat, randLen, concat.length)));
+		// } catch (Exception ex) {
+		// 	System.err.println("Err in handling auth request part 1: " + ex);
+		// 	return null;
+		//}
 		try {
-			cipher = Cipher.getInstance(RSA_METHOD, "BC");
+			cipher = Cipher.getInstance("RSA", "BC");
 			cipher.init(Cipher.DECRYPT_MODE, serverKey);
-			rand = cipher.doFinal( (byte[])challenge.getObjContents().get(0) );
-			userKey = (PublicKey)challenge.getObjContents().get(1);
+			byte[] chal = (byte[])challenge.getObjContents().get(0);
+			byte[] plain1 = cipher.doFinal(Arrays.copyOfRange(chal, 0, chal.length/2));
+			byte[] plain2 = cipher.doFinal(Arrays.copyOfRange(chal, chal.length/2, chal.length));
+			byte[] plain = new byte[(3072/8) * 2];
+			System.arraycopy(plain1, 0, plain, 0, plain1.length);
+			System.arraycopy(plain2, 0, plain, plain1.length, plain2.length);
+			rand = Arrays.copyOfRange(plain, 0, 8);
+			KeyFactory kf = KeyFactory.getInstance("RSA", "BC");
+			userKey = kf.generatePublic(new PKCS8EncodedKeySpec(Arrays.copyOfRange(plain, 8, plain.length)));
+			//userKey = (PublicKey)challenge.getObjContents().get(1);
 		} catch (Exception ex) {
-			System.err.println("Err in handling auth request part 1: " + ex);
+			System.err.println("AuthNoParam: Err in handling auth request part 1: " + ex);
 			return null;
 		}
+		//Stage2 -- Construct AuthResponse
 		try {
-			//generate AES256 key
+			//generate AES256 key as session key
 			keyGen = KeyGenerator.getInstance("AES", "BC");
 			keyGen.init(256, new SecureRandom());
 			AESKey = keyGen.generateKey();
+			//generate HMAC identity key
+			keyGen = KeyGenerator.getInstance("HmacSHA256", "BC");
+			keyGen.init(256, new SecureRandom());
+			identity_key = keyGen.generateKey();
 		} catch (Exception ex) {
-			System.err.println("Error in handling auth request (RSA): " + ex);
+			System.err.println("AuthNoParam: Error in handling auth request (RSA): " + ex);
 			return null;
 		}
 
-		//Stage2 -- Auth response
+		//Stage2.5 -- Auth response
 		Envelope response = new Envelope("AUTH");
 		try {
 			MessageDigest messageDigest = MessageDigest.getInstance("SHA-256");
 			messageDigest.update(rand);
 			cipher.init(Cipher.ENCRYPT_MODE, userKey);
 			ByteArrayOutputStream msg = new ByteArrayOutputStream();
+			//Add hash of challenge to response
 			msg.write(messageDigest.digest());
+			//Add chosen session key to response
 			msg.write(AESKey.getEncoded());
+			//add HMAC identity key to response
+			msg.write(identity_key.getEncoded());
+			//add timestamp, 30 random bits (to allow for additions)
+			t = (new SecureRandom()).nextInt(2147483647/2);
+			msg.write((Integer)t);
+			//encrypt and send envelope
 			response.addObject(cipher.doFinal(msg.toByteArray()));
 			output.writeObject(response);
 		} catch (Exception ex) {
@@ -478,7 +519,7 @@ public class FileThread extends Thread
 		System.out.println("Authentication complete, success!");
 		return AESKey; //auth steps complete		
 	}
-
+	
 	private SecretKey authenticate(Envelope challenge) {
 		SecretKey AESKey = null;
 		Cipher cipher = null;
@@ -487,7 +528,7 @@ public class FileThread extends Thread
 		byte[] rand;
 		KeyGenerator keyGen = null;
 		
-		if (challenge == null || !challenge.getMessage().equals("AUTH") || challenge.getObjContents().size() != 2) {
+		if (challenge == null || !challenge.getMessage().equals("AUTH")) {
 			return null;
 		}
 		
@@ -525,42 +566,154 @@ public class FileThread extends Thread
 			System.err.println("Unable to load private key: " + e);
 			return null;
 		}
+		byte[] randChal;
 		//Stage1 -- handle receiving initial auth request
 		try {
-			cipher = Cipher.getInstance(RSA_METHOD, "BC");
+			cipher = Cipher.getInstance("RSA", "BC");
 			cipher.init(Cipher.DECRYPT_MODE, serverKey);
-			rand = cipher.doFinal( (byte[])challenge.getObjContents().get(0) );
-			userKey = (PublicKey)challenge.getObjContents().get(1);
+			byte[] chal = (byte[])challenge.getObjContents().get(0);
+			byte[] plain1 = cipher.doFinal(Arrays.copyOfRange(chal, 0, chal.length/2));
+			byte[] plain2 = cipher.doFinal(Arrays.copyOfRange(chal, chal.length/2, chal.length));
+			byte[] plain = new byte[(3072/8) * 2];
+			System.arraycopy(plain1, 0, plain, 0, plain1.length);
+			System.arraycopy(plain2, 0, plain, plain1.length, plain2.length);
+			randChal = Arrays.copyOfRange(plain, 0, 8);
+			byte[] encKey = Arrays.copyOfRange(plain, 8, 430);
+			System.out.println("Rand: " + new String(randChal));
+			KeyFactory kf = KeyFactory.getInstance("RSA", "BC");
+			System.out.println(encKey.length);
+			userKey = kf.generatePublic(new X509EncodedKeySpec(encKey));
+			//userKey = (PublicKey)challenge.getObjContents().get(1);
 		} catch (Exception ex) {
-			System.err.println("Err in handling auth request part 1: " + ex);
+			System.err.println("Err in handling auth request part 1: ");
+			ex.printStackTrace();
 			return null;
 		}
+		//Stage2 -- Construct AuthResponse
 		try {
-			//generate AES256 key
+			//generate AES256 key as session key
 			keyGen = KeyGenerator.getInstance("AES", "BC");
 			keyGen.init(256, new SecureRandom());
 			AESKey = keyGen.generateKey();
+			//generate HMAC identity key
+			keyGen = KeyGenerator.getInstance("HmacSHA256", "BC");
+			keyGen.init(256, new SecureRandom());
+			identity_key = keyGen.generateKey();
 		} catch (Exception ex) {
-			System.err.println("Error in handling auth request (RSA): " + ex);
+			System.err.println("AuthNoParam: Error in handling auth request (RSA): " + ex);
 			return null;
 		}
 
-		//Stage2 -- Auth response
+		//Stage2.5 -- Auth response
 		Envelope response = new Envelope("AUTH");
 		try {
 			MessageDigest messageDigest = MessageDigest.getInstance("SHA-256");
-			messageDigest.update(rand);
+			messageDigest.update(randChal);
 			cipher.init(Cipher.ENCRYPT_MODE, userKey);
 			ByteArrayOutputStream msg = new ByteArrayOutputStream();
+			//Add hash of challenge to response
 			msg.write(messageDigest.digest());
+			//Add chosen session key to response
+			System.out.println("AES enc len: " + AESKey.getEncoded().length);
 			msg.write(AESKey.getEncoded());
+			//add HMAC identity key to response
+			System.out.println("identikey enc len: " + identity_key.getEncoded().length);
+			msg.write(identity_key.getEncoded());
+			//add timestamp, 30 random bits (to allow for additions)
+			t = (new SecureRandom()).nextInt(2147483647/2);
+			msg.write((Integer)t);
+			//encrypt and send envelope
 			response.addObject(cipher.doFinal(msg.toByteArray()));
 			output.writeObject(response);
 		} catch (Exception ex) {
 			System.err.println("Error in encrypting/hashing auth response (RSA/SHA-256): " + ex);
 			return null;
 		}
+		/*
+		//Stage2 -- Auth response
+		Envelope response = new Envelope("AUTH");
+		try {
+			MessageDigest messageDigest = MessageDigest.getInstance("SHA-256");
+			messageDigest.update(randChal);
+			cipher.init(Cipher.ENCRYPT_MODE, userKey);
+			ByteArrayOutputStream msg = new ByteArrayOutputStream();
+			msg.write(messageDigest.digest());
+			msg.write(AESKey.getEncoded());
+			response.addObject(cipher.doFinal(msg.toByteArray()));
+			output.writeObject(response);
+			output.flush();
+			output.reset();
+		} catch (Exception ex) {
+			System.err.println("Error in encrypting/hashing auth response (RSA/SHA-256): " + ex);
+			return null;
+		}
+		*/
 		System.out.println("Authentication complete, success!");
 		return AESKey; //auth steps complete		
+		
+	}
+	//encrypts, hmacs, TODO timestamps
+	private void sendEncryptedWithHMAC(Envelope message) { 
+		try {
+			Mac mac = Mac.getInstance("HmacSHA256", "BC");
+			mac.init(identity_key);
+
+			Envelope to_be_sent = new Envelope("REQ");
+												
+			Cipher object_cipher = Cipher.getInstance(SYM_METHOD, "BC");
+			object_cipher.init(Cipher.ENCRYPT_MODE, symKey);
+								
+			SealedObject hmac_msg_sealed = new SealedObject(message, object_cipher);
+			to_be_sent.addObject(hmac_msg_sealed);
+													
+			byte[] rawHamc = mac.doFinal(convertToBytes(hmac_msg_sealed));
+			to_be_sent.addObject(rawHamc);
+
+			output.reset();
+			output.writeObject(to_be_sent);
+			output.flush();
+			output.reset();
+		} catch(Exception ex) {
+			System.err.println("Error in sending encrypted response (AES/HMAC): " + ex);
+		}
+	}
+
+	private Envelope recieveEncryptedWithHMAC() {
+		Envelope response  = null;
+		Envelope plaintext = null;
+		try {			
+			response = (Envelope)input.readObject();
+			byte[] msg_combined_encrypted = convertToBytes((SealedObject)response.getObjContents().get(0));
+			Mac mac = Mac.getInstance("HmacSHA256", "BC");
+			mac.init(identity_key);
+			byte[] rawHamc_2 = mac.doFinal(msg_combined_encrypted);
+			byte[] Hmac_passed = (byte[])response.getObjContents().get(1);
+			if(Arrays.equals(rawHamc_2, Hmac_passed)) {
+				plaintext = (Envelope)((SealedObject)response.getObjContents().get(0)).getObject(symKey);
+				int t_received = (Integer)plaintext.getObjContents().get(0);
+				if(t_received == t) {
+					t++;
+				} else {
+					System.out.println("The message is replayed/reordered.");
+					socket.close();
+				}
+			}
+		} catch(Exception e) {
+			System.err.println("Error recieving an encrypted response (AES/HMAC): " + e);
+		}
+		return plaintext;
+	}
+	private byte[] convertToBytes(Object object){
+ 		try { 
+    	   	ByteArrayOutputStream bos = new ByteArrayOutputStream();
+         	ObjectOutputStream out = new ObjectOutputStream(bos);
+        	out.writeObject(object);
+        	bos.close();
+        	out.close();
+        	return bos.toByteArray();
+    	} catch (Exception byte_exception) {
+				System.out.println("Can't convert object to a byte array");
+				return null;
+		}
 	}
 }

@@ -14,6 +14,8 @@ public class FileClient extends Client implements FileClientInterface {
 	private static final String RSA_METHOD = "RSA/NONE/OAEPWithSHA256AndMGF1Padding";
 	private static final String SYM_METHOD = "AES/CBC/PKCS5Padding";
 	private static SecretKey symKey;
+	private static SecretKey identity_key;
+	private static int t = 0;
 
 	public PublicKey getFSkey()
 	{
@@ -41,27 +43,42 @@ public class FileClient extends Client implements FileClientInterface {
 		SecureRandom srng = new SecureRandom();
 		//64-bit random challenge
 		byte[] rand = new byte[8];
-		byte[] challenge = new byte[8];
+		byte[] challenge;
 		symKey = null;
 		srng.nextBytes(rand);
 
-		//STAGE1 -- Initialize connecction, prepare challenge
+		//STAGE1 -- Initialize connection, prepare challenge
 		Envelope auth = new Envelope("AUTH");
+		//concat nonce and user public key
+		ByteArrayOutputStream concat = new ByteArrayOutputStream();
+		byte[] encodedKey;
 		try {
-			cipher = Cipher.getInstance(RSA_METHOD, "BC");
-			cipher.init(Cipher.ENCRYPT_MODE, serverKey);
-			challenge = cipher.doFinal(rand);	
-		} catch (Exception ex) {
-			System.err.println("Encrypting Challenge Failed (RSA): " + ex);
+			concat.write(rand, 0 , 8);
+			System.out.println("Rand: " + new String(rand));
+			encodedKey = usrPubKey.getEncoded();
+			System.out.println("EncKey len: " + encodedKey.length);
+			concat.write(encodedKey, 0, encodedKey.length);
+		} catch(Exception ex) {
+			System.err.println("encoding error: " + ex);
 			return false;
 		}
 
+		//need enough space for two items encrpyted with the 3072 bit server public key
+		//encrypt packed bytes with group server's public key
 		try {
+			challenge = new byte[(3072/8) * 2];
+			cipher = Cipher.getInstance("RSA", "BC");
+			cipher.init(Cipher.ENCRYPT_MODE, serverKey);
+			byte[] reqBytes = concat.toByteArray();
+			System.out.println("reqBytes len: " + reqBytes.length);
+			byte[] enc1 = cipher.doFinal(Arrays.copyOfRange(reqBytes, 0, reqBytes.length/2));
+			byte[] enc2 = cipher.doFinal(Arrays.copyOfRange(reqBytes, reqBytes.length/2, reqBytes.length));
+			System.arraycopy(enc1, 0, challenge, 0, enc1.length);
+			System.arraycopy(enc2, 0, challenge, enc1.length, enc2.length);
 			auth.addObject(challenge);
-			auth.addObject(usrPubKey);	    		
 			output.writeObject(auth);
 		} catch (Exception ex) {
-			System.err.println("Error sending authentication request: " + ex);
+			System.err.println("Encrypting Challenge Failed (RSA): " + ex);
 			return false;
 		}
 		
@@ -73,13 +90,14 @@ public class FileClient extends Client implements FileClientInterface {
 			System.err.println("Error recieving authentication response: " + ex);
 			return false;
 		}
-		if(env != null && env.getMessage().equals("AUTH") && env.getObjContents().size() == 1) {
+		System.out.println(env.getMessage());
+		if(env != null && env.getMessage().equals("AUTH")) {
 			try {
 				MessageDigest messageDigest = MessageDigest.getInstance("SHA-256");
-				//prepare validation cipher
+				//byte array decyption cipher
 				cipher.init(Cipher.DECRYPT_MODE, usrPrivKey);
-				//validate challenge response
 				byte[] resp = cipher.doFinal( (byte[])env.getObjContents().get(0) );
+				//parse response bytes
 				messageDigest.update(rand);
 				int len = messageDigest.getDigestLength();
 				byte[] challenge_resp = Arrays.copyOfRange(resp,0,len);
@@ -88,10 +106,17 @@ public class FileClient extends Client implements FileClientInterface {
 					System.out.println("Server authenticity could not be verified");
 					return false;
 				}
+				System.out.println("chal hash len: " + len);
+				System.out.println("Resp len: " + resp.length);
 				//retrieve AES256 session key
-				symKey = (SecretKey)new SecretKeySpec(Arrays.copyOfRange(resp,len,resp.length), "AES");
+				symKey = (SecretKey)new SecretKeySpec(Arrays.copyOfRange(resp,len,len+32), "AES");
+				identity_key = (SecretKey)new SecretKeySpec(Arrays.copyOfRange(resp,len+32,len+64), "HmacSHA256");
+				//ObjectInputStream objIn = new ObjectInputStream(new ByteArrayInputStream(Arrays.copyOfRange(resp,len+64,resp.length)));
+				//t = (Integer)env.getObjContents().get(1);
+				//t++;
 			} catch (Exception e) {
-				System.err.println("Error in validating challenge response / retreiving session key (RSA): " + e);
+				System.err.println("Error in validating challenge response / retreiving session key (RSA): ");
+				e.printStackTrace();
 				return false;
 			}			
 		} else {
