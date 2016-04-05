@@ -14,8 +14,6 @@ import java.security.spec.X509EncodedKeySpec;
 import javax.xml.bind.DatatypeConverter;
 import javax.crypto.spec.IvParameterSpec;
 import java.nio.ByteBuffer;
-import javax.xml.bind.DatatypeConverter;
-
 
 public class GroupThread extends Thread 
 {

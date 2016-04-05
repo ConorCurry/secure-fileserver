@@ -7,6 +7,7 @@ import javax.crypto.spec.SecretKeySpec;
 import java.security.spec.PKCS8EncodedKeySpec;
 import javax.crypto.spec.IvParameterSpec;
 import javax.xml.bind.DatatypeConverter;
+import java.lang.Byte;
 
 public class ClientApp
 {
@@ -29,6 +30,8 @@ public class ClientApp
     private static PublicKey pubKey = null;
     private static PrivateKey privKey = null;
     private static boolean fs_authentication = false;
+    private static long timestamp = 0l;
+    private static PublicKey fsPubKey = null;
     
     public static void main(String[] args) throws Exception
     {
@@ -204,6 +207,7 @@ public class ClientApp
                    verified = groupClient.authenticate(username, privKey, gsPubKey);
                 }
             }
+
             //if the authentication succeeds, then the user can use the AES key to acquire token 
             if(verified)
             {
@@ -601,8 +605,6 @@ public class ClientApp
                         fs_name = null;
                         fs_port = 0;
             }
-
-            PublicKey fsPubKey = null;
             
             //look into file server's public key
             Hashtable<String, PublicKey> fs_pubKeys = null;
@@ -666,6 +668,7 @@ public class ClientApp
                 FCToken = groupClient.getToken_connectToFileServer(username, new ArrayList<String>(token.getGroups()), fsPubKey);
                 if(FCToken != null)
                 {
+                    timestamp = (new Date()).getTime();
                     System.out.print("Authenticating FileServer...");
             		if(!fileClient.authenticate(FCToken, pubKey, privKey, fsPubKey)) {
             			System.out.println("Authentication Failed!");
@@ -704,6 +707,14 @@ public class ClientApp
             do {
                 System.out.print("Please enter the path of the file you want to delete: ");
                 String path = input.nextLine();
+                if((new Date()).getTime() - timestamp >= 600000) 
+                {
+                    FCToken = groupClient.getToken_connectToFileServer(username, new ArrayList<String>(token.getGroups()), fsPubKey);
+                    if(FCToken != null)
+                        timestamp = (new Date()).getTime();
+                    else
+                        break;
+                }
                 success = fileClient.delete(path, FCToken);
                 if(success) {
                     System.out.printf("Successfully deleted %s\n", path);
@@ -765,6 +776,15 @@ public class ClientApp
                         String grp = selectGroup();
                         if(!grp.equals(""))
                         {
+                            if((new Date()).getTime() - timestamp >= 600000) 
+                            {
+                                FCToken = groupClient.getToken_connectToFileServer(username, new ArrayList<String>(token.getGroups()), fsPubKey);
+                                if(FCToken != null)
+                                    timestamp = (new Date()).getTime();
+                                else
+                                    break;
+                            }
+
                             success = fileClient.download(src, dest, grp, FCToken, EDToken.getKeys());
                             if(success) {
                                 System.out.println("Download successful!");
@@ -819,13 +839,25 @@ public class ClientApp
                         }
                         if(proceed)
                         {
-                            success = fileClient.upload(src, dest, grp, FCToken, EDToken.getKeys());
-                            if(success) {
-                                System.out.println("Upload successful!");
-                            }else {
-                                System.out.print("Upload unsuccessful, try again? (y/n): ");
-                                if(input.nextLine().equals("n")) {
-                                    break;
+                            boolean s = true;
+                            if((new Date()).getTime() - timestamp >= 600000) 
+                            {
+                                FCToken = groupClient.getToken_connectToFileServer(username, new ArrayList<String>(token.getGroups()), fsPubKey);
+                                if(FCToken != null)
+                                    timestamp = (new Date()).getTime();
+                                else
+                                    s = false;
+                            }
+                            if(s)
+                            {
+                                success = fileClient.upload(src, dest, grp, FCToken, EDToken.getKeys());
+                                if(success) {
+                                    System.out.println("Upload successful!");
+                                }else {
+                                    System.out.print("Upload unsuccessful, try again? (y/n): ");
+                                    if(input.nextLine().equals("n")) {
+                                        break;
+                                    }
                                 }
                             }
                         }
@@ -849,15 +881,26 @@ public class ClientApp
         }
         if(choice == 1)
         {
-            ArrayList<String> allFiles = (ArrayList<String>)fileClient.listFiles(FCToken);
-            if(allFiles == null || allFiles.isEmpty()) {
-                System.out.println("Sorry, You did not have any file now\n");
-				
-			} else {
-				for(String file : allFiles) {
-					System.out.println(file);
-				}
-			}
+            boolean s = true;
+            if((new Date()).getTime() - timestamp >= 600000) 
+            {
+                FCToken = groupClient.getToken_connectToFileServer(username, new ArrayList<String>(token.getGroups()), fsPubKey);
+                if(FCToken != null)
+                    timestamp = (new Date()).getTime();
+                else
+                    s = false;
+            }
+            if(s)
+            {
+                ArrayList<String> allFiles = (ArrayList<String>)fileClient.listFiles(FCToken);
+                if(allFiles == null || allFiles.isEmpty()) {
+                    System.out.println("Sorry, You did not have any file now\n");
+    			} else {
+    				for(String file : allFiles) {
+    					System.out.println(file);
+    				}
+    			}
+            }
         }
         System.out.println("Returning to main menu...");
     }
@@ -1113,7 +1156,6 @@ public class ClientApp
 			pubKey = kp.getPublic();
 			privKey = kp.getPrivate();
 			user_publicKeys.put(username, pubKey);
-            System.out.println("Public Key is: " + DatatypeConverter.printBase64Binary(pubKey.getEncoded()));
                 
 			//write the updated table back to the file 
 			ObjectOutputStream uPubKOutStream = new ObjectOutputStream(new FileOutputStream("UserPublicKeys.bin"));
