@@ -1138,11 +1138,8 @@ public class ClientApp
 		username = input.nextLine();
 
 		//read the key pair file to see whether the user exists already.
-		ObjectInputStream userPubKeysStream = new ObjectInputStream(new FileInputStream("UserPublicKeys.bin"));
-		Hashtable<String, PublicKey> user_publicKeys = (Hashtable<String, PublicKey>)userPubKeysStream.readObject();
-		userPubKeysStream.close();
+		Hashtable<String, PublicKey> user_publicKeys = new Hashtable<String, PublicKey>();
 
-		boolean existed = false;
 		//if not, create a new key pair and add it into the file
 		if(user_publicKeys == null || !user_publicKeys.containsKey(username))
         {
@@ -1158,9 +1155,10 @@ public class ClientApp
 			user_publicKeys.put(username, pubKey);
                 
 			//write the updated table back to the file 
+           
 			ObjectOutputStream uPubKOutStream = new ObjectOutputStream(new FileOutputStream("UserPublicKeys.bin"));
-			uPubKOutStream.writeObject(user_publicKeys);
-			uPubKOutStream.close();
+        	uPubKOutStream.writeObject(user_publicKeys);
+        	uPubKOutStream.close();
                 
 			//hash the user's password and make it to be the secret key to encrypt the private keys 
 			MessageDigest messageDigest = MessageDigest.getInstance("SHA-256");
@@ -1184,11 +1182,7 @@ public class ClientApp
 			byte[] key_data = (privKey).getEncoded();
 			byte[] encrypted_data = ucipher.doFinal(key_data);
                 
-			FileInputStream uPrivis = new FileInputStream("UserPrivateKeys.bin");
-			ObjectInputStream userPrivKeysStream = new ObjectInputStream(uPrivis);
-			Hashtable<String, ArrayList<byte[]>> user_privKeys = (Hashtable<String, ArrayList<byte[]>>)userPrivKeysStream.readObject();
-			uPrivis.close();
-			userPrivKeysStream.close();
+			Hashtable<String, ArrayList<byte[]>> user_privKeys = new Hashtable<String, ArrayList<byte[]>>();
 
 			ArrayList<byte[]> salt_priv = new ArrayList<byte[]>();
 			salt_priv.add(encrypted_data);
