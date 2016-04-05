@@ -8,6 +8,7 @@ import javax.crypto.spec.IvParameterSpec;
 import javax.crypto.spec.SecretKeySpec;
 import java.security.*;
 import javax.xml.bind.DatatypeConverter;
+import java.nio.ByteBuffer;
 
 public class FileClient extends Client implements FileClientInterface {
 
@@ -111,9 +112,10 @@ public class FileClient extends Client implements FileClientInterface {
 				//retrieve AES256 session key
 				symKey = (SecretKey)new SecretKeySpec(Arrays.copyOfRange(resp,len,len+32), "AES");
 				identity_key = (SecretKey)new SecretKeySpec(Arrays.copyOfRange(resp,len+32,len+64), "HmacSHA256");
-				//ObjectInputStream objIn = new ObjectInputStream(new ByteArrayInputStream(Arrays.copyOfRange(resp,len+64,resp.length)));
-				//t = (Integer)env.getObjContents().get(1);
-				//t++;
+				byte[] tNonce = Arrays.copyOfRange(resp,len+64,len+68);
+				t = (Integer)ByteBuffer.wrap(tNonce).getInt();
+				t++;
+				System.out.print("TimeNonce: " + t);
 			} catch (Exception e) {
 				System.err.println("Error in validating challenge response / retreiving session key (RSA): ");
 				e.printStackTrace();
