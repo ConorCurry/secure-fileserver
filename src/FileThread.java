@@ -2,15 +2,8 @@
 
 import java.lang.Thread;
 import java.net.*;
-import java.util.List;
-import java.util.ArrayList;
-import java.util.Hashtable;
-import java.io.File;
-import java.io.FileInputStream;
-import java.io.FileOutputStream;
-import java.io.ObjectInputStream;
-import java.io.ObjectOutputStream;
-import java.io.ByteArrayOutputStream;
+import java.util.*;
+import java.io.*;
 import org.bouncycastle.jce.provider.*;
 import javax.crypto.spec.IvParameterSpec;
 import javax.crypto.*;
@@ -28,6 +21,7 @@ public class FileThread extends Thread
 	private ObjectInputStream input;
 	private ObjectOutputStream output;
 	private PublicKey groupkey;
+	private PrivateKey serverKey = null;
 
 	public FileThread(Socket _socket)
 	{
@@ -147,12 +141,13 @@ public class FileThread extends Thread
 						else {
 						    UserToken yourToken = (UserToken)e.getObjContents().get(0);
 							ArrayList<String> filenames = null;
-							if(yourToken.tokVerify(groupkey)) {
-								List<String> groupPermits = yourToken.getGroups();
-						    
-								filenames = FileServer.fileList.fileAccess(groupPermits);
-				            
-								response = new Envelope("OK");
+							if(yourToken.tokVerify(groupkey) && tokVerifyIandT(yourToken)) {
+								
+									List<String> groupPermits = yourToken.getGroups();
+							    
+									filenames = FileServer.fileList.fileAccess(groupPermits);
+					            
+									response = new Envelope("OK");
    							} else {
 								response = new Envelope("FAIL-BADTOKEN");
 							}
@@ -184,7 +179,7 @@ public class FileThread extends Thread
 							String group = (String)e.getObjContents().get(1);
 							UserToken yourToken = (UserToken)e.getObjContents().get(2); //Extract token
 							int index = (Integer)e.getObjContents().get(3); //extract the index of the key used 
-							if(yourToken.tokVerify(groupkey)) {
+							if(yourToken.tokVerify(groupkey) && tokVerifyIandT(yourToken)) {
 
 								if (FileServer.fileList.checkFile(remotePath)) {
 									System.out.printf("Error: file already exists at %s\n", remotePath);
@@ -234,7 +229,7 @@ public class FileThread extends Thread
 
 					String remotePath = (String)e.getObjContents().get(0);
 					Token t = (Token)e.getObjContents().get(1);
-					if(t.tokVerify(groupkey)) {
+					if(t.tokVerify(groupkey) && tokVerifyIandT(t)) {
 						ShareFile sf = FileServer.fileList.getFile("/"+remotePath);
 						if (sf == null) {
 							System.out.printf("Error: File %s doesn't exist\n", remotePath);
@@ -329,7 +324,7 @@ public class FileThread extends Thread
 					String remotePath = (String)e.getObjContents().get(0);
 					Token t = (Token)e.getObjContents().get(1);
 					ShareFile sf = FileServer.fileList.getFile("/"+remotePath);
-					if(t.tokVerify(groupkey)) {
+					if(t.tokVerify(groupkey) && tokVerifyIandT(t)) {
 						if (sf == null) {
 							System.out.printf("Error: File %s doesn't exist\n", remotePath);
 							e = new Envelope("ERROR_DOESNTEXIST");
@@ -482,7 +477,6 @@ public class FileThread extends Thread
 	private SecretKey authenticate(Envelope challenge) {
 		SecretKey AESKey = null;
 		Cipher cipher = null;
-		PrivateKey serverKey = null;
 		PublicKey userKey = null;
 		byte[] rand;
 		KeyGenerator keyGen = null;
@@ -562,5 +556,29 @@ public class FileThread extends Thread
 		}
 		System.out.println("Authentication complete, success!");
 		return AESKey; //auth steps complete		
+	}
+
+	public boolean tokVerifyIandT(UserToken token)
+	{
+		try
+		{
+			byte[] to_be_verified = token.getEncryptedTime();
+			Cipher cipher = Cipher.getInstance("RSA/NONE/OAEPWithSHA256AndMGF1Padding", "BC");
+			cipher.init(cipher.DECRYPT_MODE, serverKey);
+		    byte[] decrypted_data = cipher.doFinal(to_be_verified);
+		    ByteArrayInputStream baos = new ByteArrayInputStream(decrypted_data);
+	        DataInputStream dos = new DataInputStream(baos);
+	        long result=dos.readLong();
+	        dos.close();
+			if((new Date()).getTime() - result < 600000)
+					return true;
+		}
+		catch(Exception e)
+		{
+			System.out.println("Fail to retrieve time stamp of the token.");
+			System.out.println(e);
+			return false;
+		}
+		return false;
 	}
 }
