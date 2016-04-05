@@ -750,6 +750,7 @@ public class GroupThread extends Thread
 								{
 									response = new Envelope("OK"); //Success
 									response.addObject((Integer)t);	
+									t++;
 									response.addObject(returnedMember);
 								}
 							}

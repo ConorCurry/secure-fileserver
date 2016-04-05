@@ -768,7 +768,7 @@ public class GroupClient extends Client implements GroupClientInterface {
 					int t_received = (Integer)plaintext.getObjContents().get(0);
 					if(t_received != t)
 					{
-							System.out.println("The message is replayed/reordered.");
+						System.out.println("The message is replayed/reordered.");
 					}
 				}
 			}
