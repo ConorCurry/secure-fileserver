@@ -731,7 +731,6 @@ public class GroupThread extends Thread
 				{
 					response = new Envelope("FAIL");
 					response.addObject((Integer)t);	
-					t++;
 					response.addObject(null);
 					
 					if(!(plaintext.getObjContents().size() < 3))
@@ -750,12 +749,12 @@ public class GroupThread extends Thread
 								{
 									response = new Envelope("OK"); //Success
 									response.addObject((Integer)t);	
-									t++;
 									response.addObject(returnedMember);
 								}
 							}
 						}
 					}
+					t++;
 					mac = Mac.getInstance("HmacSHA256", "BC");
 					mac.init(identity_key);
 
