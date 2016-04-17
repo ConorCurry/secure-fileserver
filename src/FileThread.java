@@ -10,7 +10,8 @@ import javax.crypto.*;
 import java.security.*;
 import java.security.spec.PKCS8EncodedKeySpec;
 import java.security.spec.X509EncodedKeySpec;
-import javax.crypto.spec.SecretKeySpec;
+import javax.crypto.spec.*;
+import java.security.spec.KeySpec;
 import java.math.BigInteger;
 import java.util.Scanner;
 
@@ -407,11 +408,6 @@ public class FileThread extends Thread
 		
 		//Stage0 -- load private key
 		try {	
-			//generate the secret key to decrypt the private key 
-			MessageDigest messageDigest = MessageDigest.getInstance("SHA-256");
-			messageDigest.update((FileServer.password).getBytes());
-			byte[] hashedPassword = messageDigest.digest();
-
 			//read in encrypted private key 
 			FileInputStream fis = new FileInputStream("FileServerPrivateKey.bin");
 			ObjectInputStream keyStream = new ObjectInputStream(fis);   
@@ -422,13 +418,14 @@ public class FileThread extends Thread
 			byte[] key_data = server_priv_byte.get(0);
 			byte[] salt = server_priv_byte.get(1);
 			
+			SecretKeyFactory f = SecretKeyFactory.getInstance("PBKDF2WithHmacSHA1", "BC");
+			KeySpec ks = new PBEKeySpec((FileServer.password).toCharArray(), salt, 1024, 256);
+			SecretKey s = f.generateSecret(ks);
+			Key skey = new SecretKeySpec(s.getEncoded(), "AES");
+			
 			//decrypt the one read from the file to get the server's private key 
-			Cipher cipher_privKey = Cipher.getInstance(SYM_METHOD, "BC");
-			//create a shared key with the user's hashed password 
-			SecretKeySpec skey = new SecretKeySpec(hashedPassword, "AES");
-
-			IvParameterSpec ivSpec = new IvParameterSpec(salt);
-			cipher_privKey.init(Cipher.DECRYPT_MODE, skey, ivSpec);
+			Cipher cipher_privKey = Cipher.getInstance("AES", "BC");
+			cipher_privKey.init(Cipher.DECRYPT_MODE, skey);
 			byte[] decrypted_data = cipher_privKey.doFinal(key_data);
 			
 			//recover the private key from the decrypted byte array 
@@ -439,78 +436,81 @@ public class FileThread extends Thread
 			System.err.println("Unable to load private key: " + e);
 			return null;
 		}
+	
 		//Stage1 -- handle receiving initial auth request
-		// try {
-		// 	cipher = Cipher.getInstance(RSA_METHOD, "BC");
-		// 	cipher.init(Cipher.DECRYPT_MODE, serverKey);
-		// 	//rand = cipher.doFinal( (byte[])challenge.getObjContents().get(0) );
-		// 	//userKey = (PublicKey)challenge.getObjContents().get(1);
-		// 	//concat = cipher.doFinal( (byte[])challenge.getObjContents().get(0) );
-		// 	int randLen = 8;
-		// 	rand = Arrays.copyOfRange(concat, 0, randLen);
-		// 	KeyFactory kf = KeyFactory.getInstance(RSA_METHOD, "BC");
-		// 	userKey = kf.generatePublic(new X509EncodedKeySpec(Arrays.copyOfRange(concat, randLen, concat.length)));
-		// } catch (Exception ex) {
-		// 	System.err.println("Err in handling auth request part 1: " + ex);
-		// 	return null;
-		//}
 		try {
 			cipher = Cipher.getInstance("RSA", "BC");
 			cipher.init(Cipher.DECRYPT_MODE, serverKey);
-			byte[] chal = (byte[])challenge.getObjContents().get(0);
-			byte[] plain1 = cipher.doFinal(Arrays.copyOfRange(chal, 0, chal.length/2));
-			byte[] plain2 = cipher.doFinal(Arrays.copyOfRange(chal, chal.length/2, chal.length));
-			byte[] plain = new byte[(3072/8) * 2];
-			System.arraycopy(plain1, 0, plain, 0, plain1.length);
-			System.arraycopy(plain2, 0, plain, plain1.length, plain2.length);
-			rand = Arrays.copyOfRange(plain, 0, 8);
+			ArrayList<Object> temp = challenge.getObjContents();
+			byte[] user_DHPub = (byte[])temp.get(4);
+			byte[] sigTobeVerify = (byte[])temp.get(5);
+			byte[] p_byte = cipher.doFinal((byte[])temp.get(0));
+			byte[] g_byte = cipher.doFinal((byte[])temp.get(1));
+			byte[] encKey1 = cipher.doFinal((byte[])temp.get(2));
+			byte[] encKey2 = cipher.doFinal((byte[])temp.get(3));
+			byte[] encKey = new byte[encKey1.length + encKey2.length];
+			System.arraycopy(encKey1, 0 , encKey, 0, encKey1.length);
+			System.arraycopy(encKey2, 0 , encKey, encKey1.length, encKey2.length);
+			//retrieve user's public key 
 			KeyFactory kf = KeyFactory.getInstance("RSA", "BC");
-			userKey = kf.generatePublic(new PKCS8EncodedKeySpec(Arrays.copyOfRange(plain, 8, plain.length)));
-			//userKey = (PublicKey)challenge.getObjContents().get(1);
-		} catch (Exception ex) {
-			System.err.println("AuthNoParam: Err in handling auth request part 1: " + ex);
-			return null;
-		}
-		//Stage2 -- Construct AuthResponse
-		try {
-			//generate AES256 key as session key
-			keyGen = KeyGenerator.getInstance("AES", "BC");
-			keyGen.init(256, new SecureRandom());
-			AESKey = keyGen.generateKey();
-			//generate HMAC identity key
-			keyGen = KeyGenerator.getInstance("HmacSHA256", "BC");
-			keyGen.init(256, new SecureRandom());
-			identity_key = keyGen.generateKey();
-		} catch (Exception ex) {
-			System.err.println("AuthNoParam: Error in handling auth request (RSA): " + ex);
-			return null;
-		}
+			System.out.println(encKey.length);
+			userKey = kf.generatePublic(new X509EncodedKeySpec(encKey));
 
-		//Stage2.5 -- Auth response
-		Envelope response = new Envelope("AUTH");
-		try {
-			MessageDigest messageDigest = MessageDigest.getInstance("SHA-256");
-			messageDigest.update(rand);
-			cipher.init(Cipher.ENCRYPT_MODE, userKey);
-			ByteArrayOutputStream msg = new ByteArrayOutputStream();
-			//Add hash of challenge to response
-			msg.write(messageDigest.digest());
-			//Add chosen session key to response
-			msg.write(AESKey.getEncoded());
-			//add HMAC identity key to response
-			msg.write(identity_key.getEncoded());
-			//add timestamp, 30 random bits (to allow for additions)
-			t = (new SecureRandom()).nextInt(2147483647/2);
-			msg.write((Integer)t);
-			//encrypt and send envelope
-			response.addObject(cipher.doFinal(msg.toByteArray()));
-			output.writeObject(response);
+			//verify signature. 
+			Signature sig = Signature.getInstance("RSA", "BC");
+			sig.initVerify(userKey);
+	    	//update decrypted data to be verified and verify the data
+	    	sig.update(user_DHPub);
+	    	boolean verified = sig.verify(sigTobeVerify);
+	    	if(verified)
+	    	{
+	    		//retrieve user's DH public key
+	    		kf = KeyFactory.getInstance("DH", "BC");
+				X509EncodedKeySpec x509Spec = new X509EncodedKeySpec(user_DHPub);
+           		PublicKey userDHPublicKey = kf.generatePublic(x509Spec);
+
+	    		BigInteger p = new BigInteger(p_byte);
+	    		BigInteger g = new BigInteger(g_byte);
+	    		System.out.println(p + "\n\n\n" + g);
+	    		//generate DH key pairs. 
+				KeyPairGenerator kpg = KeyPairGenerator.getInstance("DH", "BC");
+
+			    DHParameterSpec param = new DHParameterSpec(p, g);
+			    kpg.initialize(param);
+
+			    KeyPair kp = kpg.generateKeyPair();
+
+			    PrivateKey dhPrivate = kp.getPrivate();
+			    PublicKey dhPublic = kp.getPublic();
+
+			    KeyAgreement ka = KeyAgreement.getInstance("DH");
+			    ka.init(dhPrivate);
+			    ka.doPhase(userDHPublicKey, true);
+			    AESKey = ka.generateSecret("AES");
+
+			    Envelope response = new Envelope("AUTH");
+			    byte[] dhPublic_bytes = dhPublic.getEncoded();
+			    //we need to sign this value. 
+
+			    //generate signature
+				sig = Signature.getInstance("RSA", "BC");
+				sig.initSign(serverKey, new SecureRandom());
+				//update encrypted data to be signed and sign the data 
+				sig.update(dhPublic_bytes);
+				byte[] sigBytes = sig.sign();
+
+				response.addObject(dhPublic);
+				response.addObject(sigBytes);
+				output.writeObject(response);
+	    	}
+			
 		} catch (Exception ex) {
-			System.err.println("Error in encrypting/hashing auth response (RSA/SHA-256): " + ex);
+			System.err.println("Err in handling auth request part 1: ");
+			ex.printStackTrace();
 			return null;
 		}
 		System.out.println("Authentication complete, success!");
-		return AESKey; //auth steps complete		
+		return AESKey; //auth steps complete			
 	}
 	
 	private SecretKey authenticate(Envelope challenge) {
@@ -519,6 +519,7 @@ public class FileThread extends Thread
 		PublicKey userKey = null;
 		byte[] rand;
 		KeyGenerator keyGen = null;
+		KeyFactory kf = null;
 		
 		if (challenge == null || !challenge.getMessage().equals("AUTH")) {
 			return null;
@@ -526,11 +527,6 @@ public class FileThread extends Thread
 		
 		//Stage0 -- load private key
 		try {	
-			//generate the secret key to decrypt the private key 
-			MessageDigest messageDigest = MessageDigest.getInstance("SHA-256");
-			messageDigest.update((FileServer.password).getBytes());
-			byte[] hashedPassword = messageDigest.digest();
-
 			//read in encrypted private key 
 			FileInputStream fis = new FileInputStream("FileServerPrivateKey.bin");
 			ObjectInputStream keyStream = new ObjectInputStream(fis);   
@@ -541,105 +537,97 @@ public class FileThread extends Thread
 			byte[] key_data = server_priv_byte.get(0);
 			byte[] salt = server_priv_byte.get(1);
 			
+			SecretKeyFactory f = SecretKeyFactory.getInstance("PBKDF2WithHmacSHA1", "BC");
+			KeySpec ks = new PBEKeySpec((FileServer.password).toCharArray(), salt, 1024, 256);
+			SecretKey s = f.generateSecret(ks);
+			Key skey = new SecretKeySpec(s.getEncoded(), "AES");
+			
 			//decrypt the one read from the file to get the server's private key 
-			Cipher cipher_privKey = Cipher.getInstance(SYM_METHOD, "BC");
-			//create a shared key with the user's hashed password 
-			SecretKeySpec skey = new SecretKeySpec(hashedPassword, "AES");
-
-			IvParameterSpec ivSpec = new IvParameterSpec(salt);
-			cipher_privKey.init(Cipher.DECRYPT_MODE, skey, ivSpec);
+			Cipher cipher_privKey = Cipher.getInstance("AES", "BC");
+			cipher_privKey.init(Cipher.DECRYPT_MODE, skey);
 			byte[] decrypted_data = cipher_privKey.doFinal(key_data);
 			
 			//recover the private key from the decrypted byte array 
-			KeyFactory kf = KeyFactory.getInstance("RSA", "BC");
+			kf = KeyFactory.getInstance("RSA", "BC");
 			serverKey = kf.generatePrivate(new PKCS8EncodedKeySpec(decrypted_data));
 
 		} catch (Exception e) {
 			System.err.println("Unable to load private key: " + e);
 			return null;
 		}
-		byte[] randChal;
+	
 		//Stage1 -- handle receiving initial auth request
 		try {
 			cipher = Cipher.getInstance("RSA", "BC");
 			cipher.init(Cipher.DECRYPT_MODE, serverKey);
-			byte[] chal = (byte[])challenge.getObjContents().get(0);
-			byte[] plain1 = cipher.doFinal(Arrays.copyOfRange(chal, 0, chal.length/2));
-			byte[] plain2 = cipher.doFinal(Arrays.copyOfRange(chal, chal.length/2, chal.length));
-			byte[] plain = new byte[(3072/8) * 2];
-			System.arraycopy(plain1, 0, plain, 0, plain1.length);
-			System.arraycopy(plain2, 0, plain, plain1.length, plain2.length);
-			randChal = Arrays.copyOfRange(plain, 0, 8);
-			byte[] encKey = Arrays.copyOfRange(plain, 8, 430);
-			System.out.println("Rand: " + new String(randChal));
-			KeyFactory kf = KeyFactory.getInstance("RSA", "BC");
-			System.out.println(encKey.length);
-			userKey = kf.generatePublic(new X509EncodedKeySpec(encKey));
-			//userKey = (PublicKey)challenge.getObjContents().get(1);
+			ArrayList<Object> temp = challenge.getObjContents();
+			byte[] user_DHPub = (byte[])temp.get(4);
+			byte[] sigTobeVerify = (byte[])temp.get(5);
+			byte[] p_byte = cipher.doFinal((byte[])temp.get(0));
+			byte[] g_byte = cipher.doFinal((byte[])temp.get(1));
+			byte[] encKey1 = cipher.doFinal((byte[])temp.get(2));
+			byte[] encKey2 = cipher.doFinal((byte[])temp.get(3));
+			byte[] encKey = new byte[encKey1.length + encKey2.length];
+			System.arraycopy(encKey1, 0 , encKey, 0, encKey1.length);
+			System.arraycopy(encKey2, 0 , encKey, encKey1.length, encKey2.length);
+			//retrieve user's public key 
+			//KeyFactory kf = KeyFactory.getInstance("RSA", "BC");
+			userKey = KeyFactory.getInstance("RSA").generatePublic(new X509EncodedKeySpec(encKey));
+
+			//verify signature. 
+			Signature sig = Signature.getInstance("RSA", "BC");
+			sig.initVerify(userKey);
+	    	//update decrypted data to be verified and verify the data
+	    	sig.update(user_DHPub);
+	    	boolean verified = sig.verify(sigTobeVerify);
+	    	if(verified)
+	    	{
+	    		
+		    	BigInteger	p = new BigInteger(1, p_byte);
+		    	BigInteger g = new BigInteger(1, g_byte);
+		    	System.out.println(p + "\n\n\n" + g);
+	    		//retrieve user's DH public key
+	    		kf = KeyFactory.getInstance("DH", "BC");
+				X509EncodedKeySpec x509Spec = new X509EncodedKeySpec(user_DHPub);
+           		PublicKey userDHPublicKey = kf.generatePublic(x509Spec);
+
+	    		//generate DH key pairs. 
+				KeyPairGenerator kpg = KeyPairGenerator.getInstance("DH", "BC");
+
+			    DHParameterSpec param = new DHParameterSpec(p, g);
+			    kpg.initialize(param);
+
+			    KeyPair kp = kpg.generateKeyPair();
+
+			    PrivateKey dhPrivate = kp.getPrivate();
+			    PublicKey dhPublic = kp.getPublic();
+
+			    KeyAgreement ka = KeyAgreement.getInstance("DH");
+			    ka.init(dhPrivate);
+			    ka.doPhase(userDHPublicKey, true);
+			    AESKey = ka.generateSecret("AES");
+
+			    Envelope response = new Envelope("AUTH");
+			    byte[] dhPublic_bytes = dhPublic.getEncoded();
+			    //we need to sign this value. 
+
+			    //generate signature
+				sig = Signature.getInstance("RSA", "BC");
+				sig.initSign(serverKey, new SecureRandom());
+				//update encrypted data to be signed and sign the data 
+				sig.update(dhPublic_bytes);
+				byte[] sigBytes = sig.sign();
+
+				response.addObject(dhPublic_bytes);
+				response.addObject(sigBytes);
+				output.writeObject(response);
+	    	}
+			
 		} catch (Exception ex) {
 			System.err.println("Err in handling auth request part 1: ");
 			ex.printStackTrace();
 			return null;
 		}
-		//Stage2 -- Construct AuthResponse
-		try {
-			//generate AES256 key as session key
-			keyGen = KeyGenerator.getInstance("AES", "BC");
-			keyGen.init(256, new SecureRandom());
-			AESKey = keyGen.generateKey();
-			//generate HMAC identity key
-			keyGen = KeyGenerator.getInstance("HmacSHA256", "BC");
-			keyGen.init(256, new SecureRandom());
-			identity_key = keyGen.generateKey();
-		} catch (Exception ex) {
-			System.err.println("AuthNoParam: Error in handling auth request (RSA): " + ex);
-			return null;
-		}
-
-		//Stage2.5 -- Auth response
-		Envelope response = new Envelope("AUTH");
-		try {
-			MessageDigest messageDigest = MessageDigest.getInstance("SHA-256");
-			messageDigest.update(randChal);
-			cipher.init(Cipher.ENCRYPT_MODE, userKey);
-			ByteArrayOutputStream msg = new ByteArrayOutputStream();
-			//Add hash of challenge to response
-			msg.write(messageDigest.digest());
-			//Add chosen session key to response
-			System.out.println("AES enc len: " + AESKey.getEncoded().length);
-			msg.write(AESKey.getEncoded());
-			//add HMAC identity key to response
-			System.out.println("identikey enc len: " + identity_key.getEncoded().length);
-			msg.write(identity_key.getEncoded());
-			//add timestamp, 30 random bits (to allow for additions)
-			t = (new SecureRandom()).nextInt(2147483647/2);
-			msg.write((Integer)t);
-			//encrypt and send envelope
-			response.addObject(cipher.doFinal(msg.toByteArray()));
-			output.writeObject(response);
-		} catch (Exception ex) {
-			System.err.println("Error in encrypting/hashing auth response (RSA/SHA-256): " + ex);
-			return null;
-		}
-		/*
-		//Stage2 -- Auth response
-		Envelope response = new Envelope("AUTH");
-		try {
-			MessageDigest messageDigest = MessageDigest.getInstance("SHA-256");
-			messageDigest.update(randChal);
-			cipher.init(Cipher.ENCRYPT_MODE, userKey);
-			ByteArrayOutputStream msg = new ByteArrayOutputStream();
-			msg.write(messageDigest.digest());
-			msg.write(AESKey.getEncoded());
-			response.addObject(cipher.doFinal(msg.toByteArray()));
-			output.writeObject(response);
-			output.flush();
-			output.reset();
-		} catch (Exception ex) {
-			System.err.println("Error in encrypting/hashing auth response (RSA/SHA-256): " + ex);
-			return null;
-		}
-		*/
 		System.out.println("Authentication complete, success!");
 		return AESKey; //auth steps complete		
 		

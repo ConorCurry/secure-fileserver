@@ -12,8 +12,9 @@ import javax.crypto.spec.SecretKeySpec;
 import java.security.spec.PKCS8EncodedKeySpec;
 import java.security.spec.X509EncodedKeySpec;
 import javax.xml.bind.DatatypeConverter;
-import javax.crypto.spec.IvParameterSpec;
+import javax.crypto.spec.*;
 import java.nio.ByteBuffer;
+import java.security.spec.KeySpec;
 
 public class GroupThread extends Thread 
 {
@@ -25,6 +26,7 @@ public class GroupThread extends Thread
 	private SecretKey AES_key;
 	private ObjectInputStream input;
 	private ObjectOutputStream output;
+	private Key encrypt_key;
 	
 	public GroupThread(Socket _socket, GroupServer _gs)
 	{
@@ -43,11 +45,6 @@ public class GroupThread extends Thread
 		//read the server's public key in and private key in 
 		try
 		{
-			//generate the secret key to decrypt the private key 
-			MessageDigest messageDigest = MessageDigest.getInstance("SHA-256");
-			messageDigest.update((my_gs.password).getBytes());
-			byte[] hashedPassword = messageDigest.digest();
-
 			//read in encrypted private key 
 			ObjectInputStream sPrivKInStream = new ObjectInputStream(new FileInputStream("ServerPrivate.bin"));    
 			ArrayList<byte[]> server_priv_byte = (ArrayList<byte[]>)sPrivKInStream.readObject();
@@ -55,14 +52,15 @@ public class GroupThread extends Thread
 
 			byte[] key_data = server_priv_byte.get(0);
 			byte[] salt = server_priv_byte.get(1);
+
+			SecretKeyFactory f = SecretKeyFactory.getInstance("PBKDF2WithHmacSHA1", "BC");
+			KeySpec ks = new PBEKeySpec((my_gs.password).toCharArray(), salt, 1024, 256);
+			SecretKey s = f.generateSecret(ks);
+			encrypt_key = new SecretKeySpec(s.getEncoded(), "AES");
 			
 			//decrypt the one read from the file to get the server's private key 
-			Cipher cipher_privKey = Cipher.getInstance(AES_Method, "BC");
-			//create a shared key with the user's hashed password 
-			SecretKeySpec skey = new SecretKeySpec(hashedPassword, "AES");
-
-			IvParameterSpec ivSpec = new IvParameterSpec(salt);
-			cipher_privKey.init(Cipher.DECRYPT_MODE, skey, ivSpec);
+			Cipher cipher_privKey = Cipher.getInstance("AES", "BC");
+			cipher_privKey.init(Cipher.DECRYPT_MODE, encrypt_key);
 			byte[] decrypted_data = cipher_privKey.doFinal(key_data);
 			
 			//recover the private key from the decrypted byte array 
@@ -892,12 +890,19 @@ public class GroupThread extends Thread
 					}
 					else
 					{
-						ArrayList<SecretKey> file_keys = null;
+						ArrayList<SecretKey> file_keys = new ArrayList<SecretKey>();
 						if(my_gs.groupList.checkGroup(subset.get(0)))
 						{
 							if(my_gs.groupList.getFileKeys(subset.get(0)) != null)
 							{
-								file_keys = new ArrayList<SecretKey>(my_gs.groupList.getFileKeys(subset.get(0)));
+								ArrayList<byte[]> encrypted_file_keys = new ArrayList<byte[]>(my_gs.groupList.getFileKeys(subset.get(0)));
+								for(byte[] eFk : encrypted_file_keys)
+								{
+									Cipher deCipher = Cipher.getInstance("AES", "BC");
+									deCipher.init(Cipher.DECRYPT_MODE, encrypt_key);
+									byte[] deKey = deCipher.doFinal(eFk);
+									file_keys.add((SecretKey)new SecretKeySpec(deKey, "AES"));
+								}
 								UserToken yourToken = createToken(username, subset, file_keys); //Create a token
 								yourToken.tokSign(privKey); //sign the token for the file server authentication purpose
 								
@@ -1193,7 +1198,6 @@ public class GroupThread extends Thread
 						//remove the pending requests
 						try
 						{
-							
 							ObjectInputStream reqsIn = new ObjectInputStream(new FileInputStream("UserRequests.bin"));
 							Hashtable<String, PublicKey> requests_pubKeys = (Hashtable<String, PublicKey>)reqsIn.readObject();
 							reqsIn.close();
@@ -1255,7 +1259,14 @@ public class GroupThread extends Thread
 						{
 							KeyGenerator key = KeyGenerator.getInstance("AES", "BC");
 							key.init(256, new SecureRandom()); //128-bit AES key
-							my_gs.groupList.removeMember(username, deleteFromGroups.get(index), key.generateKey());
+							//generate a 128 key for new group 
+							SecretKey file_key = key.generateKey();
+
+							Cipher cipher = Cipher.getInstance("AES", "BC");
+							cipher.init(Cipher.ENCRYPT_MODE, encrypt_key);
+
+							byte[] encrypted_file_key = cipher.doFinal(file_key.getEncoded());
+							my_gs.groupList.removeMember(username, deleteFromGroups.get(index), encrypted_file_key);
 						}
 						catch(Exception e)
 						{
@@ -1315,13 +1326,20 @@ public class GroupThread extends Thread
 			{
 				KeyGenerator key = KeyGenerator.getInstance("AES", "BC");
 				key.init(256, new SecureRandom()); //128-bit AES key
+				//generate a 128 key for new group 
+				SecretKey file_key = key.generateKey();
+
+				Cipher cipher = Cipher.getInstance("AES", "BC");
+				cipher.init(Cipher.ENCRYPT_MODE, encrypt_key);
+
+				byte[] encrypted_file_key = cipher.doFinal(file_key.getEncoded()); //128-bit AES key
 		
 				//Does user already exist?
 				if(my_gs.groupList.checkGroup(groupname))
 				{
 					return false; //Group already exists
 				}
-				else if(my_gs.groupList.addGroup(groupname, requester, key.generateKey())) //if group is successfully added
+				else if(my_gs.groupList.addGroup(groupname, requester, encrypted_file_key)) //if group is successfully added
 				{
 				    //this method handles group creation with an owner
 				    //also put the user as a group member
@@ -1475,11 +1493,16 @@ public class GroupThread extends Thread
 						{
 							KeyGenerator key = KeyGenerator.getInstance("AES", "BC");
 							key.init(256, new SecureRandom()); //128-bit AES key
-		
+							//generate a 128 key for new group 
+							SecretKey file_key = key.generateKey();
 
+							Cipher cipher = Cipher.getInstance("AES", "BC");
+							cipher.init(Cipher.ENCRYPT_MODE, encrypt_key);
+
+							byte[] encrypted_file_key = cipher.doFinal(file_key.getEncoded());
+							my_gs.groupList.removeMember(user, group, encrypted_file_key);
 							my_gs.userList.removeGroup(user, group);
-		                    my_gs.groupList.removeMember(user, group, key.generateKey());
-							return true; //remove this successfully
+		                  	return true; //remove this successfully
 						}
 						catch (Exception e)
 						{

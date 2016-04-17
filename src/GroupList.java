@@ -11,7 +11,7 @@ import javax.crypto.*;
 		private static final char[] blacklist = {'&', '+'};
 		private Hashtable<String, Group> list = new Hashtable<String, Group>();
 		
-		public synchronized boolean addGroup(String groupname, String owner, SecretKey key)
+		public synchronized boolean addGroup(String groupname, String owner, byte[] key)
 		{
 			for(char invalidChar : blacklist) {
 				if(groupname.indexOf(invalidChar) > 0) {
@@ -59,7 +59,7 @@ import javax.crypto.*;
 	   		return true;
    		}
 		
-		public synchronized void removeMember(String user, String groupname, SecretKey key) {
+		public synchronized void removeMember(String user, String groupname, byte[] key) {
 		    //NOTE: this function does not have the privilege to remove an owner
 		    //add a new file key when a member is removed from the group
 		    list.get(groupname).removeMember(user);
@@ -71,7 +71,7 @@ import javax.crypto.*;
 			return list.get(groupname).getOwners();
 		}
 		
-		public synchronized ArrayList<SecretKey> getFileKeys(String groupname)
+		public synchronized ArrayList<byte[]> getFileKeys(String groupname)
 		{
 			return list.get(groupname).getFileKeys();
 		}
@@ -109,13 +109,13 @@ import javax.crypto.*;
 		private static final long serialVersionUID = 6610772112L;
 		private ArrayList<String> owners;
 		private List<String> members;
-		private ArrayList<SecretKey> file_keys; //created for file encryption/decryption
+		private ArrayList<byte[]> file_keys; //created for file encryption/decryption
 		
 		public Group()
 		{
 			owners = new ArrayList<String>();
 			members = new ArrayList<String>();
-			file_keys = new ArrayList<SecretKey>();
+			file_keys = new ArrayList<byte[]>();
 		}
 
 		public List<String> getMember()
@@ -137,7 +137,7 @@ import javax.crypto.*;
 	        }
 		}
 		
-		public ArrayList<SecretKey> getFileKeys()
+		public ArrayList<byte[]> getFileKeys()
 		{
 			return file_keys;
 		}
@@ -152,7 +152,7 @@ import javax.crypto.*;
 			owners.add(user);
 		}
 		
-		public void addNewKey(SecretKey key)
+		public void addNewKey(byte[] key)
 		{
 			file_keys.add(key);
 		}

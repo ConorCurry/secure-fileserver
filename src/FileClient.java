@@ -4,11 +4,15 @@ import java.io.*;
 import java.util.*;
 import org.bouncycastle.jce.provider.*;
 import javax.crypto.*;
+import javax.crypto.spec.DHParameterSpec;
+import javax.crypto.spec.DHPublicKeySpec;
 import javax.crypto.spec.IvParameterSpec;
 import javax.crypto.spec.SecretKeySpec;
 import java.security.*;
 import javax.xml.bind.DatatypeConverter;
 import java.nio.ByteBuffer;
+import java.math.BigInteger;
+import java.security.spec.X509EncodedKeySpec;
 
 public class FileClient extends Client implements FileClientInterface {
 
@@ -42,86 +46,115 @@ public class FileClient extends Client implements FileClientInterface {
 		KeyPairGenerator keyPairGen = null;
 		Cipher cipher = null;
 		SecureRandom srng = new SecureRandom();
-		//64-bit random challenge
-		byte[] rand = new byte[8];
-		byte[] challenge;
-		symKey = null;
-		srng.nextBytes(rand);
+		
+		//generate two big integers for DH
+		BigInteger p, g;
+		int bitLength = 512;
+		SecureRandom rnd = new SecureRandom();
+		p = BigInteger.probablePrime(bitLength, rnd);
+		g = BigInteger.probablePrime(bitLength, rnd);
+		
+		byte[] sigBytes = null;
+		byte[] dhPublic_bytes = null;
+		PrivateKey dhPrivate = null;
+		try
+		{
+			//generate DH key pairs. 
+			KeyPairGenerator kpg = KeyPairGenerator.getInstance("DH", "BC");
+
+		    DHParameterSpec param = new DHParameterSpec(p, g);
+		    kpg.initialize(param);
+
+		    KeyPair kp = kpg.generateKeyPair();
+
+		    dhPrivate = kp.getPrivate();
+		    PublicKey dhPublic = kp.getPublic();
+		    dhPublic_bytes = dhPublic.getEncoded();
+		    //we need to sign this value. 
+
+		    //generate signature
+			Signature sig = Signature.getInstance("RSA", "BC");
+			sig.initSign(usrPrivKey, new SecureRandom());
+			//update encrypted data to be signed and sign the data 
+			sig.update(dhPublic_bytes);
+			sigBytes = sig.sign();
+		}
+		catch(Exception ex)
+		{
+			System.out.println("Error in generating DH pairs");
+			ex.printStackTrace();
+		}
+	    
 
 		//STAGE1 -- Initialize connection, prepare challenge
 		Envelope auth = new Envelope("AUTH");
-		//concat nonce and user public key
-		ByteArrayOutputStream concat = new ByteArrayOutputStream();
-		byte[] encodedKey;
-		try {
-			concat.write(rand, 0 , 8);
-			System.out.println("Rand: " + new String(rand));
-			encodedKey = usrPubKey.getEncoded();
-			System.out.println("EncKey len: " + encodedKey.length);
-			concat.write(encodedKey, 0, encodedKey.length);
-		} catch(Exception ex) {
-			System.err.println("encoding error: " + ex);
-			return false;
-		}
+		byte[] p_bytes = p.toByteArray();
+		byte[] g_bytes = g.toByteArray();
+		byte[] key_bytes = usrPubKey.getEncoded();
 
 		//need enough space for two items encrpyted with the 3072 bit server public key
 		//encrypt packed bytes with group server's public key
 		try {
-			challenge = new byte[(3072/8) * 2];
 			cipher = Cipher.getInstance("RSA", "BC");
 			cipher.init(Cipher.ENCRYPT_MODE, serverKey);
-			byte[] reqBytes = concat.toByteArray();
-			System.out.println("reqBytes len: " + reqBytes.length);
-			byte[] enc1 = cipher.doFinal(Arrays.copyOfRange(reqBytes, 0, reqBytes.length/2));
-			byte[] enc2 = cipher.doFinal(Arrays.copyOfRange(reqBytes, reqBytes.length/2, reqBytes.length));
-			System.arraycopy(enc1, 0, challenge, 0, enc1.length);
-			System.arraycopy(enc2, 0, challenge, enc1.length, enc2.length);
-			auth.addObject(challenge);
+			auth.addObject(cipher.doFinal(p_bytes));
+			auth.addObject(cipher.doFinal(g_bytes));
+			auth.addObject(cipher.doFinal(Arrays.copyOfRange(key_bytes, 0, 192)));
+			auth.addObject(cipher.doFinal(Arrays.copyOfRange(key_bytes, 192, key_bytes.length)));
+			auth.addObject(dhPublic_bytes); //dh
+			auth.addObject(sigBytes);//signed dh  
 			output.writeObject(auth);
 		} catch (Exception ex) {
 			System.err.println("Encrypting Challenge Failed (RSA): " + ex);
+			ex.printStackTrace();
 			return false;
 		}
 		
-		//STAGE2 -- Validate server response & retrieve session key
+		//STAGE2 -- Validate server response & retrieve server's dh public key and generate a shared keys
 		Envelope env = null;
-		try {
+		try 
+		{
 			env = (Envelope)input.readObject();
-		} catch (Exception ex) {
+		} 
+		catch (Exception ex) 
+		{
 			System.err.println("Error recieving authentication response: " + ex);
+			ex.printStackTrace();
 			return false;
 		}
-		System.out.println(env.getMessage());
-		if(env != null && env.getMessage().equals("AUTH")) {
-			try {
-				MessageDigest messageDigest = MessageDigest.getInstance("SHA-256");
-				//byte array decyption cipher
-				cipher.init(Cipher.DECRYPT_MODE, usrPrivKey);
-				byte[] resp = cipher.doFinal( (byte[])env.getObjContents().get(0) );
-				//parse response bytes
-				messageDigest.update(rand);
-				int len = messageDigest.getDigestLength();
-				byte[] challenge_resp = Arrays.copyOfRange(resp,0,len);
-				
-				if (!Arrays.equals(challenge_resp, messageDigest.digest())) {
-					System.out.println("Server authenticity could not be verified");
-					return false;
-				}
-				System.out.println("chal hash len: " + len);
-				System.out.println("Resp len: " + resp.length);
-				//retrieve AES256 session key
-				symKey = (SecretKey)new SecretKeySpec(Arrays.copyOfRange(resp,len,len+32), "AES");
-				identity_key = (SecretKey)new SecretKeySpec(Arrays.copyOfRange(resp,len+32,len+64), "HmacSHA256");
-				byte[] tNonce = Arrays.copyOfRange(resp,len+64,len+68);
-				t = (Integer)ByteBuffer.wrap(tNonce).getInt();
-				t++;
-				System.out.print("TimeNonce: " + t);
-			} catch (Exception e) {
+
+		if(env != null && env.getMessage().equals("AUTH")) 
+		{
+			try
+			{
+				byte[] oDHpubKeyByte = (byte[])(env.getObjContents().get(0));
+				byte[] signed_oDHbyte = (byte[])(env.getObjContents().get(1));
+
+				Signature sig = Signature.getInstance("RSA", "BC");
+				sig.initVerify(serverKey);
+	    		//update decrypted data to be verified and verify the data
+	    		sig.update(oDHpubKeyByte);
+	    		boolean verified = sig.verify(sigBytes);
+	    		if(verified)
+	    		{
+					KeyFactory kf = KeyFactory.getInstance("DH", "BC");
+					X509EncodedKeySpec x509Spec = new X509EncodedKeySpec(oDHpubKeyByte);
+           			PublicKey theirPublicKey = kf.generatePublic(x509Spec);
+           			KeyAgreement ka = KeyAgreement.getInstance("DH");
+			        ka.init(dhPrivate);
+			        ka.doPhase(theirPublicKey, true);
+			        symKey = ka.generateSecret("AES"); //RETRIEVE AN AES KEY. for future use. 
+	    		}
+			} 
+			catch (Exception e) 
+			{
 				System.err.println("Error in validating challenge response / retreiving session key (RSA): ");
 				e.printStackTrace();
 				return false;
 			}			
-		} else {
+		} 
+		else 
+		{
 			System.err.println("Invalid server response");
 			return false;
 		}

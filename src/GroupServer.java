@@ -11,9 +11,8 @@ import java.util.*;
 import org.bouncycastle.jce.provider.*;
 import javax.crypto.*;
 import java.security.*;
-import javax.crypto.spec.SecretKeySpec;
-import javax.crypto.spec.IvParameterSpec;
-
+import javax.crypto.spec.*;
+import java.security.spec.KeySpec;
 
 public class GroupServer extends Server {
 
@@ -69,7 +68,6 @@ public class GroupServer extends Server {
 
 			try
 			{
-				String AES_Method = "AES/CBC/PKCS5Padding";
 				Security.addProvider(new BouncyCastleProvider());
 				
 				//generate empty hashtable for storing users requesting accounts
@@ -91,24 +89,21 @@ public class GroupServer extends Server {
 	            uPubKOutStream.writeObject(user_publicKeys);
 	            uPubKOutStream.close();
 				
-				//hash the user's password and make it to be the secret key to encrypt the private keys 
-				MessageDigest messageDigest = MessageDigest.getInstance("SHA-256");
-				messageDigest.update(user_password.getBytes());
-				byte[] hashedPassword = messageDigest.digest();
-				
+				//Actually encrypt the user's private key 
+				Cipher ucipher = Cipher.getInstance("AES", "BC");
+
 				//generate a 16-bit salt
 				SecureRandom random = new SecureRandom();
-        		byte[] user_salt = new byte[16];
-        		random.nextBytes(user_salt);
+				byte[] user_salt = new byte[16];
+				random.nextBytes(user_salt);
 
-        		IvParameterSpec user_ivSpec = new IvParameterSpec(user_salt);
+	            SecretKeyFactory fu = SecretKeyFactory.getInstance("PBKDF2WithHmacSHA1", "BC");
+	            KeySpec ksu = new PBEKeySpec(user_password.toCharArray(), user_salt, 1024, 256);
+	            SecretKey su = fu.generateSecret(ksu);
+	            Key generated_skey = new SecretKeySpec(su.getEncoded(), "AES");
 
-				//Actually encrypt the user's private key 
-				Cipher ucipher = Cipher.getInstance(AES_Method, "BC");
-				//create a shared key with the user's hashed password 
-				SecretKey generated_skey = new SecretKeySpec(hashedPassword, "AES");
-				ucipher.init(Cipher.ENCRYPT_MODE, generated_skey, user_ivSpec);
-				
+				ucipher.init(Cipher.ENCRYPT_MODE, generated_skey);
+	                
 				byte[] key_data = (kp.getPrivate()).getEncoded();
 				byte[] encrypted_data = ucipher.doFinal(key_data);
 				
@@ -136,20 +131,17 @@ public class GroupServer extends Server {
 	            sPubKOutStream.writeObject(server_pub);
 	            sPubKOutStream.close();
 			
-				//hash the password and make it to be the secret key to encrypt the private keys 
-				MessageDigest messageDigest2 = MessageDigest.getInstance("SHA-256");
-				messageDigest2.update(password.getBytes());
-				byte[] hashedPassword2 = messageDigest2.digest();
-				
 				//generate salt for the server 
 				byte[] server_salt = new byte[16];
         		random.nextBytes(server_salt);
-        		IvParameterSpec server_ivSpec = new IvParameterSpec(server_salt);
-				//Actually encrypt the user's private key 
-				Cipher scipher = Cipher.getInstance(AES_Method, "BC");
-				//create a shared key with the user's hashed password 
-				SecretKeySpec generated_skey2 = new SecretKeySpec(hashedPassword2, "AES");
-				scipher.init(Cipher.ENCRYPT_MODE, generated_skey2, server_ivSpec);
+
+				Cipher scipher = Cipher.getInstance("AES", "BC");
+				SecretKeyFactory f = SecretKeyFactory.getInstance("PBKDF2WithHmacSHA1", "BC");
+				KeySpec ks = new PBEKeySpec(password.toCharArray(), server_salt, 1024, 256);
+				SecretKey s = f.generateSecret(ks);
+				Key generated_skey2 = new SecretKeySpec(s.getEncoded(), "AES");
+
+				scipher.init(Cipher.ENCRYPT_MODE, generated_skey2);
 				
 				byte[] key_data2 = (kpn.getPrivate()).getEncoded();
 				byte[] encrypted_data2 = scipher.doFinal(key_data2);
@@ -162,15 +154,21 @@ public class GroupServer extends Server {
 	            sPrivKOutStream.writeObject(server_priv_salt);
 	            sPrivKOutStream.close();
 
-				
+				//generate a 128 key for new group 
 				KeyGenerator ed_key = KeyGenerator.getInstance("AES", "BC");
 				ed_key.init(256, new SecureRandom()); //128-bit AES key
+				SecretKey file_key = ed_key.generateKey();
+
+				Cipher cipher = Cipher.getInstance("AES", "BC");
+				cipher.init(Cipher.ENCRYPT_MODE, generated_skey2);
+
+				byte[] encrypted_file_key = cipher.doFinal(file_key.getEncoded());
 		
 				//Create a new list, add current user to the ADMIN group. They now own the ADMIN group.
 				userList = new UserList();
 				groupList = new GroupList();
 				userList.addUser(username, kp.getPublic());
-				groupList.addGroup("ADMIN", username, ed_key.generateKey());
+				groupList.addGroup("ADMIN", username, encrypted_file_key);
 	            groupList.addMember(username, "ADMIN");
 				userList.addGroup(username, "ADMIN");
 				userList.addOwnership(username, "ADMIN");

@@ -3,11 +3,11 @@ import java.util.*;
 import org.bouncycastle.jce.provider.*;
 import javax.crypto.*;
 import java.security.*;
-import javax.crypto.spec.SecretKeySpec;
-import java.security.spec.PKCS8EncodedKeySpec;
-import javax.crypto.spec.IvParameterSpec;
 import javax.xml.bind.DatatypeConverter;
 import java.lang.Byte;
+import java.security.spec.KeySpec;
+import javax.crypto.spec.*;
+import java.security.spec.PKCS8EncodedKeySpec;
 
 public class ClientApp
 {
@@ -104,11 +104,6 @@ public class ClientApp
                     System.out.print("Please enter your password: ");
                     String user_password = input.nextLine();
 
-                    //hash the user's password and make it to be the secret key to encrypt the private keys 
-                    MessageDigest messageDigest = MessageDigest.getInstance("SHA-256");
-                    messageDigest.update(user_password.getBytes());
-                    byte[] hashedPassword = messageDigest.digest();
-
                     FileInputStream uPrivis = new FileInputStream("UserPrivateKeys.bin");
                     ObjectInputStream userPrivKeysStream = new ObjectInputStream(uPrivis);
                     Hashtable<String, ArrayList<byte[]>> user_privKeys = (Hashtable<String, ArrayList<byte[]>>)userPrivKeysStream.readObject();
@@ -118,12 +113,14 @@ public class ClientApp
                     byte[] key_data = user_privKeys.get(username).get(0);
                     byte[] salt = user_privKeys.get(username).get(1);
 
-                    IvParameterSpec user_ivSpec = new IvParameterSpec(salt);
+                    SecretKeyFactory f = SecretKeyFactory.getInstance("PBKDF2WithHmacSHA1", "BC");
+                    KeySpec ks = new PBEKeySpec(user_password.toCharArray(), salt, 1024, 256);
+                    SecretKey s = f.generateSecret(ks);
+                    Key skey = new SecretKeySpec(s.getEncoded(), "AES");
+                    
                     //decrypt the one read from the file to get the server's private key 
-                    Cipher cipher_privKey = Cipher.getInstance(AES_Method, "BC");
-                    //create a shared key with the user's hashed password 
-                    SecretKey skey = new SecretKeySpec(hashedPassword, "AES");
-                    cipher_privKey.init(Cipher.DECRYPT_MODE, skey, user_ivSpec);
+                    Cipher cipher_privKey = Cipher.getInstance("AES", "BC");
+                    cipher_privKey.init(Cipher.DECRYPT_MODE, skey);
                     byte[] decrypted_data = cipher_privKey.doFinal(key_data);
                     
                     KeyFactory kf = KeyFactory.getInstance("RSA", "BC");
@@ -133,6 +130,7 @@ public class ClientApp
                 {
                     System.out.println("Fail to fetch your private key. Please re-log in and try again.");
                     System.out.println("Exiting the application----------------------------------------");
+                    System.out.println(ex);
                     System.exit(-1);
                 }
             }
@@ -1161,24 +1159,20 @@ public class ClientApp
         	uPubKOutStream.writeObject(user_publicKeys);
         	uPubKOutStream.close();
                 
-			//hash the user's password and make it to be the secret key to encrypt the private keys 
-			MessageDigest messageDigest = MessageDigest.getInstance("SHA-256");
-			messageDigest.update(user_password.getBytes());
-			byte[] hashedPassword = messageDigest.digest();
-                
 			//Actually encrypt the user's private key 
-			Cipher ucipher = Cipher.getInstance(AES_Method, "BC");
-			//create a shared key with the user's hashed password 
-			SecretKey generated_skey = new SecretKeySpec(hashedPassword, "AES");
+			Cipher ucipher = Cipher.getInstance("AES", "BC");
 
 			//generate a 16-bit salt
 			SecureRandom random = new SecureRandom();
 			byte[] user_salt = new byte[16];
 			random.nextBytes(user_salt);
 
-			IvParameterSpec user_ivSpec = new IvParameterSpec(user_salt);
+            SecretKeyFactory fu = SecretKeyFactory.getInstance("PBKDF2WithHmacSHA1", "BC");
+            KeySpec ksu = new PBEKeySpec(user_password.toCharArray(), user_salt, 1024, 256);
+            SecretKey su = fu.generateSecret(ksu);
+            Key generated_skey = new SecretKeySpec(su.getEncoded(), "AES");
 
-			ucipher.init(Cipher.ENCRYPT_MODE, generated_skey, user_ivSpec);
+			ucipher.init(Cipher.ENCRYPT_MODE, generated_skey);
                 
 			byte[] key_data = (privKey).getEncoded();
 			byte[] encrypted_data = ucipher.doFinal(key_data);

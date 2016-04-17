@@ -13,8 +13,8 @@ import java.security.*;
 import javax.crypto.*;
 import java.util.Scanner;
 import java.util.ArrayList;
-import javax.crypto.spec.SecretKeySpec;
-import javax.crypto.spec.IvParameterSpec;
+import javax.crypto.spec.*;
+import java.security.spec.KeySpec;
 
 import java.util.Hashtable;
 
@@ -84,18 +84,21 @@ public class FileServer extends Server {
 				
 				//generate salt for the server 
 				SecureRandom random = new SecureRandom();
+				//generate salt for the server 
 				byte[] server_salt = new byte[16];
         		random.nextBytes(server_salt);
-        		IvParameterSpec server_ivSpec = new IvParameterSpec(server_salt);
-				//Actually encrypt the user's private key 
-				Cipher scipher = Cipher.getInstance("AES/CBC/PKCS5Padding", "BC");
-				//create a shared key with the user's hashed password 
-				SecretKeySpec generated_skey = new SecretKeySpec(hashedPassword, "AES");
-				scipher.init(Cipher.ENCRYPT_MODE, generated_skey, server_ivSpec);
+
+				Cipher scipher = Cipher.getInstance("AES", "BC");
+				SecretKeyFactory f = SecretKeyFactory.getInstance("PBKDF2WithHmacSHA1", "BC");
+				KeySpec ks = new PBEKeySpec(password.toCharArray(), server_salt, 1024, 256);
+				SecretKey s = f.generateSecret(ks);
+				Key generated_skey = new SecretKeySpec(s.getEncoded(), "AES");
+
+				scipher.init(Cipher.ENCRYPT_MODE, generated_skey);
 				
 				byte[] key_data = (kpn.getPrivate()).getEncoded();
 				byte[] encrypted_data = scipher.doFinal(key_data);
-				
+
 				ArrayList<byte[]> server_priv_salt = new ArrayList<byte[]>();
 				server_priv_salt.add(encrypted_data);
 				server_priv_salt.add(server_salt);
