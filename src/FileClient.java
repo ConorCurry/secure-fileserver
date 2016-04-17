@@ -18,8 +18,8 @@ public class FileClient extends Client implements FileClientInterface {
 
 	private static final String RSA_METHOD = "RSA/NONE/OAEPWithSHA256AndMGF1Padding";
 	private static final String SYM_METHOD = "AES/CBC/PKCS5Padding";
-	private static SecretKey symKey;
-	private static SecretKey identity_key;
+	private static SecretKey symKey = null;
+	private static SecretKey identity_key = null;
 	private static int t = 0;
 
 	public PublicKey getFSkey()
@@ -57,6 +57,7 @@ public class FileClient extends Client implements FileClientInterface {
 		byte[] sigBytes = null;
 		byte[] dhPublic_bytes = null;
 		PrivateKey dhPrivate = null;
+		
 		try
 		{
 			//generate DH key pairs. 
@@ -84,7 +85,6 @@ public class FileClient extends Client implements FileClientInterface {
 			System.out.println("Error in generating DH pairs");
 			ex.printStackTrace();
 		}
-	    
 
 		//STAGE1 -- Initialize connection, prepare challenge
 		Envelope auth = new Envelope("AUTH");
@@ -134,7 +134,7 @@ public class FileClient extends Client implements FileClientInterface {
 				sig.initVerify(serverKey);
 	    		//update decrypted data to be verified and verify the data
 	    		sig.update(oDHpubKeyByte);
-	    		boolean verified = sig.verify(sigBytes);
+	    		boolean verified = sig.verify(signed_oDHbyte);
 	    		if(verified)
 	    		{
 					KeyFactory kf = KeyFactory.getInstance("DH", "BC");
@@ -143,21 +143,42 @@ public class FileClient extends Client implements FileClientInterface {
            			KeyAgreement ka = KeyAgreement.getInstance("DH");
 			        ka.init(dhPrivate);
 			        ka.doPhase(theirPublicKey, true);
-			        symKey = ka.generateSecret("AES"); //RETRIEVE AN AES KEY. for future use. 
+			        symKey = ka.generateSecret("AES"); //RETRIEVE AN AES KEY. for future use.    
 	    		}
 			} 
 			catch (Exception e) 
 			{
-				System.err.println("Error in validating challenge response / retreiving session key (RSA): ");
+				System.err.println("Error in retreiving session key: ");
 				e.printStackTrace();
 				return false;
-			}			
+			}		
 		} 
 		else 
 		{
 			System.err.println("Invalid server response");
 			return false;
 		}
+
+		try
+		{
+			Envelope idenEnv = new Envelope("IDENTITY");
+		    output.writeObject(idenEnv.encrypted(symKey));
+
+			env = (Envelope)((SealedObject)input.readObject()).getObject(symKey);
+			if(env != null && env.getMessage().equals("OK"))
+			    identity_key = (SecretKey)env.getObjContents().get(0);
+			else
+			{
+				System.err.println("Invalid server response FOR GETTING IDENTITY KEY");
+				return false;
+			}
+		}
+		catch (Exception e) 
+		{
+				System.err.println("Error in retreiving identity key: ");
+				e.printStackTrace();
+				return false;
+		}		
 		return true;
 	}
 

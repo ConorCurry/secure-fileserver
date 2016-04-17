@@ -395,6 +395,8 @@ public class FileThread extends Thread
 		byte[] rand;
 		byte[] concat;
 		KeyGenerator keyGen = null;
+		KeyFactory kf = null;
+
 		try {
 			challenge = (Envelope)input.readObject();
 			System.out.println("Authenticating new connection...");
@@ -429,7 +431,7 @@ public class FileThread extends Thread
 			byte[] decrypted_data = cipher_privKey.doFinal(key_data);
 			
 			//recover the private key from the decrypted byte array 
-			KeyFactory kf = KeyFactory.getInstance("RSA", "BC");
+			kf = KeyFactory.getInstance("RSA", "BC");
 			serverKey = kf.generatePrivate(new PKCS8EncodedKeySpec(decrypted_data));
 
 		} catch (Exception e) {
@@ -452,26 +454,27 @@ public class FileThread extends Thread
 			System.arraycopy(encKey1, 0 , encKey, 0, encKey1.length);
 			System.arraycopy(encKey2, 0 , encKey, encKey1.length, encKey2.length);
 			//retrieve user's public key 
-			KeyFactory kf = KeyFactory.getInstance("RSA", "BC");
-			System.out.println(encKey.length);
-			userKey = kf.generatePublic(new X509EncodedKeySpec(encKey));
+			//KeyFactory kf = KeyFactory.getInstance("RSA", "BC");
+			userKey = KeyFactory.getInstance("RSA").generatePublic(new X509EncodedKeySpec(encKey));
 
 			//verify signature. 
 			Signature sig = Signature.getInstance("RSA", "BC");
 			sig.initVerify(userKey);
 	    	//update decrypted data to be verified and verify the data
 	    	sig.update(user_DHPub);
-	    	boolean verified = sig.verify(sigTobeVerify);
-	    	if(verified)
+	    	boolean verified1 = sig.verify(sigTobeVerify);
+
+	    	if(verified1)
 	    	{
+	    		
+		    	BigInteger	p = new BigInteger(1, p_byte);
+		    	BigInteger g = new BigInteger(1, g_byte);
+		    	
 	    		//retrieve user's DH public key
 	    		kf = KeyFactory.getInstance("DH", "BC");
 				X509EncodedKeySpec x509Spec = new X509EncodedKeySpec(user_DHPub);
            		PublicKey userDHPublicKey = kf.generatePublic(x509Spec);
 
-	    		BigInteger p = new BigInteger(p_byte);
-	    		BigInteger g = new BigInteger(g_byte);
-	    		System.out.println(p + "\n\n\n" + g);
 	    		//generate DH key pairs. 
 				KeyPairGenerator kpg = KeyPairGenerator.getInstance("DH", "BC");
 
@@ -488,8 +491,7 @@ public class FileThread extends Thread
 			    ka.doPhase(userDHPublicKey, true);
 			    AESKey = ka.generateSecret("AES");
 
-			    Envelope response = new Envelope("AUTH");
-			    byte[] dhPublic_bytes = dhPublic.getEncoded();
+			   	byte[] dhPublic_bytes = dhPublic.getEncoded();
 			    //we need to sign this value. 
 
 			    //generate signature
@@ -499,13 +501,35 @@ public class FileThread extends Thread
 				sig.update(dhPublic_bytes);
 				byte[] sigBytes = sig.sign();
 
-				response.addObject(dhPublic);
+				byte[] sigBytesHmac = sig.sign();
+				Envelope response = new Envelope("AUTH");
+				response.addObject(dhPublic_bytes);
 				response.addObject(sigBytes);
 				output.writeObject(response);
 	    	}
 			
 		} catch (Exception ex) {
 			System.err.println("Err in handling auth request part 1: ");
+			ex.printStackTrace();
+			return null;
+		}
+		try
+		{
+			Envelope identity_request = (Envelope)((SealedObject)input.readObject()).getObject(AESKey);
+			if(identity_request != null && identity_request.getMessage().equals("IDENTITY"))
+			{
+				//generate a 256-bit key for identity check in HMAC 
+		        KeyGenerator key = KeyGenerator.getInstance("HmacSHA256", "BC");
+		        key.init(256, new SecureRandom());
+		        identity_key = key.generateKey();
+
+		        Envelope response = new Envelope("OK");
+		        response.addObject(identity_key);
+		        output.writeObject(response.encrypted(AESKey));
+			}
+		}
+		catch (Exception ex) {
+			System.err.println("Err in handling sending identity key: ");
 			ex.printStackTrace();
 			return null;
 		}
@@ -579,13 +603,14 @@ public class FileThread extends Thread
 			sig.initVerify(userKey);
 	    	//update decrypted data to be verified and verify the data
 	    	sig.update(user_DHPub);
-	    	boolean verified = sig.verify(sigTobeVerify);
-	    	if(verified)
+	    	boolean verified1 = sig.verify(sigTobeVerify);
+
+	    	if(verified1)
 	    	{
 	    		
 		    	BigInteger	p = new BigInteger(1, p_byte);
 		    	BigInteger g = new BigInteger(1, g_byte);
-		    	System.out.println(p + "\n\n\n" + g);
+		    	
 	    		//retrieve user's DH public key
 	    		kf = KeyFactory.getInstance("DH", "BC");
 				X509EncodedKeySpec x509Spec = new X509EncodedKeySpec(user_DHPub);
@@ -607,8 +632,7 @@ public class FileThread extends Thread
 			    ka.doPhase(userDHPublicKey, true);
 			    AESKey = ka.generateSecret("AES");
 
-			    Envelope response = new Envelope("AUTH");
-			    byte[] dhPublic_bytes = dhPublic.getEncoded();
+			   	byte[] dhPublic_bytes = dhPublic.getEncoded();
 			    //we need to sign this value. 
 
 			    //generate signature
@@ -618,6 +642,8 @@ public class FileThread extends Thread
 				sig.update(dhPublic_bytes);
 				byte[] sigBytes = sig.sign();
 
+				byte[] sigBytesHmac = sig.sign();
+				Envelope response = new Envelope("AUTH");
 				response.addObject(dhPublic_bytes);
 				response.addObject(sigBytes);
 				output.writeObject(response);
@@ -628,9 +654,28 @@ public class FileThread extends Thread
 			ex.printStackTrace();
 			return null;
 		}
+		try
+		{
+			Envelope identity_request = (Envelope)((SealedObject)input.readObject()).getObject(AESKey);
+			if(identity_request != null && identity_request.getMessage().equals("IDENTITY"))
+			{
+				//generate a 256-bit key for identity check in HMAC 
+		        KeyGenerator key = KeyGenerator.getInstance("HmacSHA256", "BC");
+		        key.init(256, new SecureRandom());
+		        identity_key = key.generateKey();
+
+		        Envelope response = new Envelope("OK");
+		        response.addObject(identity_key);
+		        output.writeObject(response.encrypted(AESKey));
+			}
+		}
+		catch (Exception ex) {
+			System.err.println("Err in handling sending identity key: ");
+			ex.printStackTrace();
+			return null;
+		}
 		System.out.println("Authentication complete, success!");
-		return AESKey; //auth steps complete		
-		
+		return AESKey; //auth steps complete	
 	}
 	//encrypts, hmacs, TODO timestamps
 	private void sendEncryptedWithHMAC(Envelope message) { 
