@@ -19,7 +19,7 @@ header {
       <h2>
 <!-- BEGIN CHANGES HERE -->
 
-William Garrison
+Yijia Cui yic66@pitt.edu, Conor Curry clc231@pitt.edu
 
 <!-- END CHANGES HERE -->
       </h2>
@@ -34,17 +34,10 @@ countermeasures.</p>
 <!-- END CHANGES HERE -->
     </section>
     <section id="threatmodel">
-      <h2>Threat Model</h2>
+      <h2>Threat Model: Information Leakage/ modification from Servers’ and Users’ disks</h2>
 <!-- BEGIN CHANGES HERE -->
 
-<p>Define a threat model within which your implementation is subject to attack.
-You may re-use a threat model from another phase of the project, or you may
-define a new threat model (e.g., What if we were worried about more than just
-the file leakage from a file server? What if the group server was mostly
-trusted, but the password file or other state was somehow leaked? What about the
-possibility of DoS or DDoS attacks?). This threat model should be written up in
-the same format as the threat models that you were given for Phases P3 and P4 of
-the project.</p>
+<p>Description: Even though group server is mostly trusted in the system, but all the information stored on group server is unencrypted as plain text files, which is very vulnerable.  Attackers are assumed to be able to steal those information files from the disk of group server. Also, users and servers store their private keys locally, which is encrypted by a key derived from the password they set up with SHA-256. Because of the fast speed of hardwares, attackers can break SHA-256 keys brute-forcedly using dictionary and rainbow tables within reasonable time and steal/modify the private keys once the file is decrypted. Thus, a secure encryption should be added to files stored on the group server’s and users’ disks to ensure the confidentiality of those important information.</p>
 
 <!-- END CHANGES HERE -->
     </section>
@@ -52,13 +45,15 @@ the project.</p>
       <h2>Attacks</h2>
 <!-- BEGIN CHANGES HERE -->
 
-<p>Write a clear and concise description of the attacks against your
-implementation. Describe each step of the attack, and include protocol diagrams
-to clarify your discussion as needed. Provide evidence for why these attacks are
-possible, and why they represent a threat against your system.</p>
+<h3>For Group Server:</h3>
+<p>The adversary can add any person into one group by modifying UserList file and GroupList file, which will give the malicious user permission to read/write files only shared within those groups. Also, the adversary can remove any person from groups to disenable them from accessing files.</p>
 
-<p>If your group implemented programs to demonstrate your attacks, discuss these
-programs here.</p>
+<p>The adversary can get list of files keys by compromising the plaintext storing that information. The leakage of file keys can lead to the unauthorized access to files that should only be accessed to members in a certain group. The adversary can read and modify files with the stolen key lists because file servers are untrusted and can leak files encrypted by keys in the lists. The adversary can even modify the key list to mess up users that they can’t decrypt the files appropriately with wrong keys. </p>
+
+<p>The adversary can even change public keys stored in the UserList to mess up the authentication process between the user and the group server. </p>
+
+<h3>For stored private keys:</h3>
+<p>The adversary can steal encrypted private keys (with SHA-256) stored in disk and break that file to get the private key. This threat leads to the private keys being compromised. The authentication is done by RSA key pairs. Once the private key is compromised, the exchanged shared key is revealed, and all the conversation will be presented to the adversary.</p>
 
 <!-- END CHANGES HERE -->
     </section>
@@ -66,12 +61,9 @@ programs here.</p>
       <h2>Countermeasures</h2>
 <!-- BEGIN CHANGES HERE -->
 
-<p>Write a clear and concise description of the mechanism that your group
-proposes to address each attack from the previous section. Follow the format
-described in Phases P3 and P4 of the project: describe the mechanism in detail
-(including protocol diagrams as needed) and provide justification for why your
-proposed mechanism is sufficient for addressing the threat that you have
-discovered.</p>
+<p>Instead of using keys derived from passwords with SHA-256 to encrypt private keys, the new algorithm, PBKDF2WithHmacSHA1, is used to derive keys from passwords. The iteration number of this algorithm makes it slow to break by design, to make the attack hard to achieve. 
+With those keys, users and servers can store their private keys safely to reduce the possibility that private keys are compromised. Those keys can also use to encrypt important files on the servers, for example, the GroupList and UserList on the group server. The adversary could not access information encrypted in the files because of the difficulty of attacking, which prevents information being modified/leaked, like group information, file key lists, etc. 
+</p>
 
 <!-- END CHANGES HERE -->
     </section>
