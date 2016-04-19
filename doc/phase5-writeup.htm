@@ -37,7 +37,8 @@ countermeasures.</p>
       <h2>Threat Model: Information Leakage/ modification from Servers’ and Users’ disks</h2>
 <!-- BEGIN CHANGES HERE -->
 
-<p>Description: Even though group server is mostly trusted in the system, but all the information stored on group server is unencrypted as plain text files, which is very vulnerable.  Attackers are assumed to be able to steal those information files from the disk of group server. Also, users and servers store their private keys locally, which is encrypted by a key derived from the password they set up with SHA-256. Because of the fast speed of hardwares, attackers can break SHA-256 keys brute-forcedly using dictionary and rainbow tables within reasonable time and steal/modify the private keys once the file is decrypted. Thus, a secure encryption should be added to files stored on the group server’s and users’ disks to ensure the confidentiality of those important information.</p>
+<h3>Description:</h3> 
+<p>Even though group server is mostly trusted in the system, but all the information stored on group server is unencrypted as plain text files, which is very vulnerable.  Attackers are assumed to be able to steal those information files from the disk of group server. Also, users and servers store their private keys locally, which is encrypted by a key derived from the password they set up with SHA-256. Because of the fast speed of hardwares, attackers can break SHA-256 keys brute-forcedly using dictionary and rainbow tables within reasonable time and steal/modify the private keys once the file is decrypted. Thus, a secure encryption should be added to files stored on the group server’s and users’ disks to ensure the confidentiality of those important information.</p>
 
 <!-- END CHANGES HERE -->
     </section>
@@ -64,6 +65,39 @@ countermeasures.</p>
 <p>Instead of using keys derived from passwords with SHA-256 to encrypt private keys, the new algorithm, PBKDF2WithHmacSHA1, is used to derive keys from passwords. The iteration number of this algorithm makes it slow to break by design, to make the attack hard to achieve. 
 With those keys, users and servers can store their private keys safely to reduce the possibility that private keys are compromised. Those keys can also use to encrypt important files on the servers, for example, the GroupList and UserList on the group server. The adversary could not access information encrypted in the files because of the difficulty of attacking, which prevents information being modified/leaked, like group information, file key lists, etc. 
 </p>
+    </section>
+    <section id="threatmodel">
+      <h2>Threat Model: Forward Secrecy Broken</h2>
+<h3>Description:</h3> 
+<p>In previous threat models, the possibility for a private key being compromised is brought up. The adversary may record all the information starting from the authentication process and break all the messages exchanged. The forward secrecy was broken in this case.</p>
+
+</section>
+    <section id="attack">
+      <h2>Attacks</h2>
+<p>The adversary compromises the private key first and records all the messages exchanged between the innocent user and server. Then the adversary will use the private key to get the key exchanged between them, and decrypts all the messages. That decryption of message no only reveals all the information exchanged, it also reveals the list of keys being transmitted to the user if the user requests such a list from group server.  Some files are encrypted with keys with in the list, and the adversary can use that list of file keys to decrypt those files stolen from file servers (they are untrusted). </p>
+
+</section>
+    <section id="countermeasure">
+      <h2>Countermeasures</h2>
+<p>Signed Diffie-Hellman will be used through the authentication and key exchanges. (Implemented)</p>
+
+</section>
+    <section id="threatmodel">
+      <h2>Threat Model: DoS Attack</h2>
+<h3> Description:</h3>
+<p>A denial-of-service (DoS) attack can be an attmpt to make a machine unavailable to intended users. Even though the number of threads and the storage of disk are enough for legitimate uses, the adversary can make requests to consume the server’s resources and prevent real users from using those resources. </p>
+
+</section>
+    <section id="attack">
+      <h2>Attacks</h2>
+<p>The adversary may develop a driver to send requests only. For example, the adversary can write a program to send authentication/operation request only and never responds to the server’s reply. Because the server uses threads to communicate with different clients and a computer can support only a limited number of threads (the number may vary from computer to computer). If an adversary run such a driver multiple times until the number of threads are consumed completely on the server, no more client can connect to the server.  </p>
+<p>The adversary can also consume the disk of the file server by keeping uploading huge files. Once the storage of a file server is filled up, no more files can be uploaded by legitimate users.</p>
+</section>
+    <section id="countermeasure">
+      <h2>Countermeasures</h2>
+<p>The server can close the connection with a client automatically if the client does not respond in 5 minutes. This number is reasonable because that the operations are simple enough for users to perform. If they fail to response to the interactions, they have to re-log in.</p>
+
+<p>The server can assign file quota to the groups.</p>
 
 <!-- END CHANGES HERE -->
     </section>
