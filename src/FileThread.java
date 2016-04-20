@@ -68,12 +68,13 @@ public class FileThread extends Thread
 					rsp = new Envelope("FAIL");
 				}
 				output.writeObject(rsp);
-				}
+			}
 		    if(proceed)
 		    {
 			    if(authOrNot)
 			    {	
-				   if ((symKey = authenticate()) == null) {
+				   if ((symKey = authenticate((Envelope)input.readObject())) == null) 
+				   {
 							socket.close();
 							proceed = false;
 							System.out.println("Auth failed, closing connection.");
@@ -81,7 +82,8 @@ public class FileThread extends Thread
 				}
 				else
 				{
-					 if ((symKey = authenticate(msg)) == null) {
+					 if ((symKey = authenticate(msg)) == null) 
+					 {
 							socket.close();
 							proceed = false;
 							System.out.println("Auth failed, closing connection.");
@@ -384,159 +386,6 @@ public class FileThread extends Thread
 			}
 	}
 
-	//TODO: ADD TIMEOUT FOR AUTH PROCEDURE
-	
-	private SecretKey authenticate() {
-		SecretKey AESKey = null;
-		Cipher cipher = null;
-		PrivateKey serverKey = null;
-		PublicKey userKey = null;
-		Envelope challenge = null;
-		byte[] rand;
-		byte[] concat;
-		KeyGenerator keyGen = null;
-		KeyFactory kf = null;
-
-		try {
-			challenge = (Envelope)input.readObject();
-			System.out.println("Authenticating new connection...");
-		} catch (Exception e) {
-			System.err.println("Unable to recieve object: " +  e);
-			return null;
-		}
-		if (challenge == null || !challenge.getMessage().equals("AUTH") || challenge.getObjContents().size() != 2) {
-			return null;
-		}
-		
-		//Stage0 -- load private key
-		try {	
-			//read in encrypted private key 
-			FileInputStream fis = new FileInputStream("FileServerPrivateKey.bin");
-			ObjectInputStream keyStream = new ObjectInputStream(fis);   
-			ArrayList<byte[]> server_priv_byte = (ArrayList<byte[]>)keyStream.readObject();
-			keyStream.close();
-			fis.close();
-
-			byte[] key_data = server_priv_byte.get(0);
-			byte[] salt = server_priv_byte.get(1);
-			
-			SecretKeyFactory f = SecretKeyFactory.getInstance("PBKDF2WithHmacSHA1", "BC");
-			KeySpec ks = new PBEKeySpec((FileServer.password).toCharArray(), salt, 1024, 256);
-			SecretKey s = f.generateSecret(ks);
-			Key skey = new SecretKeySpec(s.getEncoded(), "AES");
-			
-			//decrypt the one read from the file to get the server's private key 
-			Cipher cipher_privKey = Cipher.getInstance("AES", "BC");
-			cipher_privKey.init(Cipher.DECRYPT_MODE, skey);
-			byte[] decrypted_data = cipher_privKey.doFinal(key_data);
-			
-			//recover the private key from the decrypted byte array 
-			kf = KeyFactory.getInstance("RSA", "BC");
-			serverKey = kf.generatePrivate(new PKCS8EncodedKeySpec(decrypted_data));
-
-		} catch (Exception e) {
-			System.err.println("Unable to load private key: " + e);
-			return null;
-		}
-	
-		//Stage1 -- handle receiving initial auth request
-		try {
-			cipher = Cipher.getInstance("RSA", "BC");
-			cipher.init(Cipher.DECRYPT_MODE, serverKey);
-			ArrayList<Object> temp = challenge.getObjContents();
-			byte[] user_DHPub = (byte[])temp.get(4);
-			byte[] sigTobeVerify = (byte[])temp.get(5);
-			byte[] p_byte = cipher.doFinal((byte[])temp.get(0));
-			byte[] g_byte = cipher.doFinal((byte[])temp.get(1));
-			byte[] encKey1 = cipher.doFinal((byte[])temp.get(2));
-			byte[] encKey2 = cipher.doFinal((byte[])temp.get(3));
-			byte[] encKey = new byte[encKey1.length + encKey2.length];
-			System.arraycopy(encKey1, 0 , encKey, 0, encKey1.length);
-			System.arraycopy(encKey2, 0 , encKey, encKey1.length, encKey2.length);
-			//retrieve user's public key 
-			//KeyFactory kf = KeyFactory.getInstance("RSA", "BC");
-			userKey = KeyFactory.getInstance("RSA").generatePublic(new X509EncodedKeySpec(encKey));
-
-			//verify signature. 
-			Signature sig = Signature.getInstance("RSA", "BC");
-			sig.initVerify(userKey);
-	    	//update decrypted data to be verified and verify the data
-	    	sig.update(user_DHPub);
-	    	boolean verified1 = sig.verify(sigTobeVerify);
-
-	    	if(verified1)
-	    	{
-	    		
-		    	BigInteger	p = new BigInteger(1, p_byte);
-		    	BigInteger g = new BigInteger(1, g_byte);
-		    	
-	    		//retrieve user's DH public key
-	    		kf = KeyFactory.getInstance("DH", "BC");
-				X509EncodedKeySpec x509Spec = new X509EncodedKeySpec(user_DHPub);
-           		PublicKey userDHPublicKey = kf.generatePublic(x509Spec);
-
-	    		//generate DH key pairs. 
-				KeyPairGenerator kpg = KeyPairGenerator.getInstance("DH", "BC");
-
-			    DHParameterSpec param = new DHParameterSpec(p, g);
-			    kpg.initialize(param);
-
-			    KeyPair kp = kpg.generateKeyPair();
-
-			    PrivateKey dhPrivate = kp.getPrivate();
-			    PublicKey dhPublic = kp.getPublic();
-
-			    KeyAgreement ka = KeyAgreement.getInstance("DH");
-			    ka.init(dhPrivate);
-			    ka.doPhase(userDHPublicKey, true);
-			    AESKey = ka.generateSecret("AES");
-
-			   	byte[] dhPublic_bytes = dhPublic.getEncoded();
-			    //we need to sign this value. 
-
-			    //generate signature
-				sig = Signature.getInstance("RSA", "BC");
-				sig.initSign(serverKey, new SecureRandom());
-				//update encrypted data to be signed and sign the data 
-				sig.update(dhPublic_bytes);
-				byte[] sigBytes = sig.sign();
-
-				byte[] sigBytesHmac = sig.sign();
-				Envelope response = new Envelope("AUTH");
-				response.addObject(dhPublic_bytes);
-				response.addObject(sigBytes);
-				output.writeObject(response);
-	    	}
-			
-		} catch (Exception ex) {
-			System.err.println("Err in handling auth request part 1: ");
-			ex.printStackTrace();
-			return null;
-		}
-		try
-		{
-			Envelope identity_request = (Envelope)((SealedObject)input.readObject()).getObject(AESKey);
-			if(identity_request != null && identity_request.getMessage().equals("IDENTITY"))
-			{
-				//generate a 256-bit key for identity check in HMAC 
-		        KeyGenerator key = KeyGenerator.getInstance("HmacSHA256", "BC");
-		        key.init(256, new SecureRandom());
-		        identity_key = key.generateKey();
-
-		        Envelope response = new Envelope("OK");
-		        response.addObject(identity_key);
-		        output.writeObject(response.encrypted(AESKey));
-			}
-		}
-		catch (Exception ex) {
-			System.err.println("Err in handling sending identity key: ");
-			ex.printStackTrace();
-			return null;
-		}
-		System.out.println("Authentication complete, success!");
-		return AESKey; //auth steps complete			
-	}
-	
 	private SecretKey authenticate(Envelope challenge) {
 		SecretKey AESKey = null;
 		Cipher cipher = null;
@@ -549,37 +398,9 @@ public class FileThread extends Thread
 			return null;
 		}
 		
-		//Stage0 -- load private key
-		try {	
-			//read in encrypted private key 
-			FileInputStream fis = new FileInputStream("FileServerPrivateKey.bin");
-			ObjectInputStream keyStream = new ObjectInputStream(fis);   
-			ArrayList<byte[]> server_priv_byte = (ArrayList<byte[]>)keyStream.readObject();
-			keyStream.close();
-			fis.close();
-
-			byte[] key_data = server_priv_byte.get(0);
-			byte[] salt = server_priv_byte.get(1);
-			
-			SecretKeyFactory f = SecretKeyFactory.getInstance("PBKDF2WithHmacSHA1", "BC");
-			KeySpec ks = new PBEKeySpec((FileServer.password).toCharArray(), salt, 1024, 256);
-			SecretKey s = f.generateSecret(ks);
-			Key skey = new SecretKeySpec(s.getEncoded(), "AES");
-			
-			//decrypt the one read from the file to get the server's private key 
-			Cipher cipher_privKey = Cipher.getInstance("AES", "BC");
-			cipher_privKey.init(Cipher.DECRYPT_MODE, skey);
-			byte[] decrypted_data = cipher_privKey.doFinal(key_data);
-			
-			//recover the private key from the decrypted byte array 
-			kf = KeyFactory.getInstance("RSA", "BC");
-			serverKey = kf.generatePrivate(new PKCS8EncodedKeySpec(decrypted_data));
-
-		} catch (Exception e) {
-			System.err.println("Unable to load private key: " + e);
-			return null;
-		}
-	
+		serverKey = FileServer.serverKey;
+		
+		
 		//Stage1 -- handle receiving initial auth request
 		try {
 			cipher = Cipher.getInstance("RSA", "BC");
@@ -654,6 +475,7 @@ public class FileThread extends Thread
 			ex.printStackTrace();
 			return null;
 		}
+		
 		try
 		{
 			Envelope identity_request = (Envelope)((SealedObject)input.readObject()).getObject(AESKey);

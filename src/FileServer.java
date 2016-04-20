@@ -1,12 +1,6 @@
 /* FileServer loads files from FileList.bin.  Stores files in shared_files directory. */
 
-import java.io.File;
-import java.io.FileInputStream;
-import java.io.FileNotFoundException;
-import java.io.FileOutputStream;
-import java.io.IOException;
-import java.io.ObjectInputStream;
-import java.io.ObjectOutputStream;
+import java.io.*;
 import java.net.*;
 import org.bouncycastle.jce.provider.*;
 import java.security.*;
@@ -15,6 +9,7 @@ import java.util.Scanner;
 import java.util.ArrayList;
 import javax.crypto.spec.*;
 import java.security.spec.KeySpec;
+import java.security.spec.PKCS8EncodedKeySpec;
 
 import java.util.Hashtable;
 
@@ -23,6 +18,8 @@ public class FileServer extends Server {
 	public static final int SERVER_PORT = 4321;
 	public static FileList fileList;
 	public static String password;
+	public static PrivateKey serverKey;
+	public static Key skey;
 	
 	public FileServer() {
 		super(SERVER_PORT, "FilePile");
@@ -48,11 +45,44 @@ public class FileServer extends Server {
 		//Filelist management
 		try
 		{
-			FileInputStream fis = new FileInputStream(fileFile);
-			fileStream = new ObjectInputStream(fis);
-			fileList = (FileList)fileStream.readObject();
+			FileInputStream fisL = new FileInputStream(fileFile);
+			fileStream = new ObjectInputStream(fisL);
+			byte[] fileListBytes = (byte[])fileStream.readObject();
 			System.out.print("Please enter the system's password: ");
 			password = console.nextLine();
+			try
+			{
+				//read in encrypted private key 
+				FileInputStream fis = new FileInputStream("FileServerPrivateKey.bin");
+				ObjectInputStream keyStream = new ObjectInputStream(fis);   
+				ArrayList<byte[]> server_priv_byte = (ArrayList<byte[]>)keyStream.readObject();
+				keyStream.close();
+				fis.close();
+
+				byte[] key_data = server_priv_byte.get(0);
+				byte[] salt = server_priv_byte.get(1);
+				
+				SecretKeyFactory f = SecretKeyFactory.getInstance("PBKDF2WithHmacSHA1", "BC");
+				KeySpec ks = new PBEKeySpec(password.toCharArray(), salt, 1024, 256);
+				SecretKey s = f.generateSecret(ks);
+				skey = new SecretKeySpec(s.getEncoded(), "AES");
+				
+				//decrypt the one read from the file to get the server's private key 
+				Cipher cipher_privKey = Cipher.getInstance("AES", "BC");
+				cipher_privKey.init(Cipher.DECRYPT_MODE, skey);
+				byte[] decrypted_data = cipher_privKey.doFinal(key_data);
+				
+				//recover the private key from the decrypted byte array 
+				KeyFactory kf = KeyFactory.getInstance("RSA", "BC");
+				serverKey = kf.generatePrivate(new PKCS8EncodedKeySpec(decrypted_data));
+
+				cipher_privKey.init(Cipher.DECRYPT_MODE, skey);
+				fileList = (FileList)convertObject(cipher_privKey.doFinal(fileListBytes));
+			}
+			catch(Exception e)
+			{
+				System.out.println("Can't read encrypted files");
+			}
 
 		} catch(FileNotFoundException e) {
 			System.out.println("FileList Does Not Exist. Creating FileList...");
@@ -93,10 +123,11 @@ public class FileServer extends Server {
 				KeySpec ks = new PBEKeySpec(password.toCharArray(), server_salt, 1024, 256);
 				SecretKey s = f.generateSecret(ks);
 				Key generated_skey = new SecretKeySpec(s.getEncoded(), "AES");
+				skey = generated_skey;
 
 				scipher.init(Cipher.ENCRYPT_MODE, generated_skey);
-				
-				byte[] key_data = (kpn.getPrivate()).getEncoded();
+				serverKey = kpn.getPrivate();
+				byte[] key_data = serverKey.getEncoded();
 				byte[] encrypted_data = scipher.doFinal(key_data);
 
 				ArrayList<byte[]> server_priv_salt = new ArrayList<byte[]>();
@@ -162,6 +193,40 @@ public class FileServer extends Server {
 			e.printStackTrace(System.err);
 		}
 	}
+	private byte[] convertToBytes(Object object)
+	{
+ 		try{ 
+    	   	ByteArrayOutputStream bos = new ByteArrayOutputStream();
+         	ObjectOutput out = new ObjectOutputStream(bos);
+        	out.writeObject(object);
+        	bos.close();
+        	out.close();
+        	return bos.toByteArray();
+    	} 
+    	catch (Exception byte_exception)
+    	{
+    		System.out.println("Can't convert object to a byte array");
+    		return null;
+    	}
+	}
+
+	private Object convertObject(byte[] data)
+	{
+   	 	try
+   	 	{
+	   	 	ByteArrayInputStream in = new ByteArrayInputStream(data);
+	    	ObjectInputStream is = new ObjectInputStream(in);
+	    	Object converted = is.readObject();
+	    	is.close();
+	    	in.close();
+	    	return converted;
+	    }
+	    catch(Exception e)
+	    {
+	    	System.out.println("Can't convert byte to object!");
+	    	return null;
+	    }
+	}
 }
 
 //This thread saves user and group lists
@@ -175,13 +240,30 @@ class ShutDownListenerFS implements Runnable
 		try
 		{
 			outStream = new ObjectOutputStream(new FileOutputStream("FileList.bin"));
-			outStream.writeObject(FileServer.fileList);
+			Cipher cipher = Cipher.getInstance("AES", "BC");
+			cipher.init(Cipher.ENCRYPT_MODE, FileServer.skey);
+			outStream.writeObject(cipher.doFinal(convertToBytes(FileServer.fileList)));
 		}
 		catch(Exception e)
 		{
 			System.err.println("Error: " + e.getMessage());
 			e.printStackTrace(System.err);
 		}
+	}
+	private byte[] convertToBytes(Object object){
+ 		try{ 
+    	   	ByteArrayOutputStream bos = new ByteArrayOutputStream();
+         	ObjectOutput out = new ObjectOutputStream(bos);
+        	out.writeObject(object);
+        	bos.close();
+        	out.close();
+        	return bos.toByteArray();
+    	} 
+    	catch (Exception byte_exception)
+    	{
+    		System.out.println("Can't convert object to a byte array");
+    		return null;
+    	}
 	}
 }
 
@@ -199,7 +281,9 @@ class AutoSaveFS extends Thread
 				try
 				{
 					outStream = new ObjectOutputStream(new FileOutputStream("FileList.bin"));
-					outStream.writeObject(FileServer.fileList);
+					Cipher cipher = Cipher.getInstance("AES", "BC");
+					cipher.init(Cipher.ENCRYPT_MODE, FileServer.skey);
+					outStream.writeObject(cipher.doFinal(convertToBytes(FileServer.fileList)));
 				}
 				catch(Exception e)
 				{
@@ -213,5 +297,20 @@ class AutoSaveFS extends Thread
 				System.out.println("Autosave Interrupted");
 			}
 		}while(true);
+	}
+	private byte[] convertToBytes(Object object){
+ 		try{ 
+    	   	ByteArrayOutputStream bos = new ByteArrayOutputStream();
+         	ObjectOutput out = new ObjectOutputStream(bos);
+        	out.writeObject(object);
+        	bos.close();
+        	out.close();
+        	return bos.toByteArray();
+    	} 
+    	catch (Exception byte_exception)
+    	{
+    		System.out.println("Can't convert object to a byte array");
+    		return null;
+    	}
 	}
 }
