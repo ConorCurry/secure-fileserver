@@ -7,6 +7,9 @@ import javax.crypto.*;
 import java.security.*;
 import java.nio.ByteBuffer;
 import java.math.BigInteger;
+import javax.crypto.spec.DHParameterSpec;
+import javax.crypto.spec.DHPublicKeySpec;
+import java.security.spec.X509EncodedKeySpec;
 
 public class GroupClient extends Client implements GroupClientInterface {
  	 private static final String RSA_Method = "RSA/NONE/OAEPWithSHA256AndMGF1Padding";
@@ -42,117 +45,163 @@ public class GroupClient extends Client implements GroupClientInterface {
 	 	try
 	 	{
 	 		Security.addProvider(new BouncyCastleProvider());
-
-	 		//genereate a 256-bit AES key for securely transmission
-	        KeyGenerator key = KeyGenerator.getInstance("AES", "BC");
-	        key.init(256, new SecureRandom());
-	        AES_key = key.generateKey();
-
-	        //generate a 256-bit key for identity check in HMAC 
-	        key = KeyGenerator.getInstance("HmacSHA256", "BC");
-	        key.init(256, new SecureRandom());
-	        identity_key = key.generateKey();
-	 		
-	 		//generate a 512 byte array for AES key and indentitiy key 
-	        byte[] keys_combined = new byte[64];
-	        System.arraycopy(AES_key.getEncoded(), 0, keys_combined, 0, 32);
-	        System.arraycopy(identity_key.getEncoded(), 0, keys_combined, 32, 32);
-
-	 		Envelope message = null;
-	 		Envelope response = null;
-	 		message = new Envelope("CHALLENGE"); //Actually don't care 
-	 		message.addObject(username);
-	 		
-	 		//random generate a 64-bit number, encrypt it, and add that to the message 
-	 		SecureRandom sr = new SecureRandom();
-			byte[] rndBytes = new byte[8];
-			sr.nextBytes(rndBytes);
-	 		
-	 		Cipher cipher = Cipher.getInstance(RSA_Method, "BC");
-	 		cipher.init(Cipher.ENCRYPT_MODE, serverPubkey);
-	 		message.addObject(cipher.doFinal(rndBytes));
-	 		
-	 		//encrypt the combined keys 
-	 		cipher.init(Cipher.ENCRYPT_MODE, serverPubkey);
-			byte[] encrypted_data = cipher.doFinal(keys_combined);
-			message.addObject(encrypted_data);
-	 		
-	 		//generate signature for the encrypted secret key 
-			Signature sig = Signature.getInstance("SHA256withRSA", "BC");
-			sig.initSign(usrPrivKey, new SecureRandom());
-			//update encrypted data to be signed and sign the data 
-			sig.update(encrypted_data);
-			byte[] sigBytes = sig.sign();
-	 		message.addObject(sigBytes);
-
-	 		//sent object
-	 		output.writeObject(message);
-			output.flush();
-			output.reset();
+			KeyPairGenerator keyPairGen = null;
+			Cipher cipher = null;
+			SecureRandom srng = new SecureRandom();
 		
-			//Get the response from the server
-			response = (Envelope)input.readObject();
-
-			//if it's null and it's a failure message because the server can't find the user's public key to encrypt the message 
-			//if its not null, it might be a succeess message 
-			if(response != null)
+			//generate two big integers for DH
+			BigInteger p, g;
+			int bitLength = 512;
+			SecureRandom rnd = new SecureRandom();
+			p = BigInteger.probablePrime(bitLength, rnd);
+			g = BigInteger.probablePrime(bitLength, rnd);
+		
+			byte[] sigBytes = null;
+			byte[] dhPublic_bytes = null;
+			PrivateKey dhPrivate = null;
+		
+			try
 			{
-					//Successful response
-					if(response.getMessage().equals("OK"))
-					{ 
-						ArrayList<Object> temp = response.getObjContents();
-						
-						if(temp != null && temp.size() == 2)
-						{
-							byte[] numberFromServer = (byte[])temp.get(0);
+				//generate DH key pairs. 
+				KeyPairGenerator kpg = KeyPairGenerator.getInstance("DH", "BC");
 
-							//hashed the user's randomly generated number to see whether the server sends the same one 
-							MessageDigest messageDigest = MessageDigest.getInstance("SHA-256");
-							messageDigest.update(rndBytes);
-							byte[] hashedNumber = messageDigest.digest();
-							
-							if(Arrays.equals(numberFromServer, hashedNumber))
-							{
-								
-								//get the server's generated number
-								Cipher rcipher = Cipher.getInstance(RSA_Method, "BC");
-								rcipher.init(Cipher.DECRYPT_MODE, usrPrivKey);
-					    		byte[] serverGeneratedNumber = rcipher.doFinal((byte[])temp.get(1));
-					    	 	
-					    	 	//hash the response of the user 
-					    	 	MessageDigest messageDigest2 = MessageDigest.getInstance("SHA-256");
-								messageDigest2.update(serverGeneratedNumber);
-								byte[] hashedNumber2 = messageDigest2.digest();
-					    	 	
-					    	 	Envelope second_message = new Envelope ("VERIFY");
-					    	 	second_message.addObject(hashedNumber2);
-					    	 	output.writeObject(second_message);
-								output.flush();
-								output.reset();
-								
-								Envelope second_response = (Envelope)input.readObject();
-								byte[] msg_combined_encrypted = convertToBytes((SealedObject)second_response.getObjContents().get(0));
-								Mac mac = Mac.getInstance("HmacSHA256", "BC");
-								mac.init(identity_key);
-								byte[] rawHamc = mac.doFinal(msg_combined_encrypted);
-								byte[] Hmac_passed = (byte[])second_response.getObjContents().get(1);
-								if(Arrays.equals(rawHamc, Hmac_passed))
-								{
-									Envelope plaintext = (Envelope)((SealedObject)second_response.getObjContents().get(0)).getObject(AES_key);
-									t = (Integer)plaintext.getObjContents().get(0);
-									t++;
-									if((plaintext.getMessage()).equals("OK"))
-									{
-										return true;
-									}
-								}
-							}
-						}
-					}
+		    	DHParameterSpec param = new DHParameterSpec(p, g);
+		    	kpg.initialize(param);
+
+		    	KeyPair kp = kpg.generateKeyPair();
+
+		    	dhPrivate = kp.getPrivate();
+		    	PublicKey dhPublic = kp.getPublic();
+		    	dhPublic_bytes = dhPublic.getEncoded();
+		    	//we need to sign this value. 
+
+		    	//generate signature
+				Signature sig = Signature.getInstance("RSA", "BC");
+				sig.initSign(usrPrivKey, new SecureRandom());
+				//update encrypted data to be signed and sign the data 
+				sig.update(dhPublic_bytes);
+				sigBytes = sig.sign();
 			}
+			catch(Exception ex)
+			{
+				System.out.println("Error in generating DH pairs");
+				ex.printStackTrace();
+			}
+
+			//STAGE1 -- Initialize connection, prepare challenge
+			Envelope auth = new Envelope("AUTH");
+			byte[] p_bytes = p.toByteArray();
+			byte[] g_bytes = g.toByteArray();
+
+			//need enough space for two items encrpyted with the 3072 bit server public key
+			//encrypt packed bytes with group server's public key
+			try 
+			{
+				cipher = Cipher.getInstance("RSA", "BC");
+				cipher.init(Cipher.ENCRYPT_MODE, serverPubkey);
+				auth.addObject(cipher.doFinal(p_bytes));
+				auth.addObject(cipher.doFinal(g_bytes));
+				auth.addObject(dhPublic_bytes); //dh
+				auth.addObject(sigBytes);//signed dh
+				auth.addObject(username);//username   
+				output.writeObject(auth);
+			} 
+			catch (Exception ex) 
+			{
+				System.err.println("Encrypting Challenge Failed (RSA): " + ex);
+				ex.printStackTrace();
+				return false;
+			}
+		
+			//STAGE2 -- Validate server response & retrieve server's dh public key and generate a shared keys
+			Envelope env = null;
+			try 
+			{
+				env = (Envelope)input.readObject();
+			} 
+			catch (Exception ex) 
+			{
+				System.err.println("Error recieving authentication response: " + ex);
+				ex.printStackTrace();
+				return false;
+			}
+
+			if(env != null && env.getMessage().equals("AUTH")) 
+			{
+				try
+				{
+					byte[] oDHpubKeyByte = (byte[])(env.getObjContents().get(0));
+					byte[] signed_oDHbyte = (byte[])(env.getObjContents().get(1));
+
+					Signature sig = Signature.getInstance("RSA", "BC");
+					sig.initVerify(serverPubkey);
+		    		//update decrypted data to be verified and verify the data
+		    		sig.update(oDHpubKeyByte);
+		    		boolean verified = sig.verify(signed_oDHbyte);
+		    		if(verified)
+		    		{
+						KeyFactory kf = KeyFactory.getInstance("DH", "BC");
+						X509EncodedKeySpec x509Spec = new X509EncodedKeySpec(oDHpubKeyByte);
+	           			PublicKey theirPublicKey = kf.generatePublic(x509Spec);
+	           			KeyAgreement ka = KeyAgreement.getInstance("DH");
+				        ka.init(dhPrivate);
+				        ka.doPhase(theirPublicKey, true);
+				        AES_key = ka.generateSecret("AES"); //RETRIEVE AN AES KEY. for future use.    
+		    		}
+				} 
+				catch (Exception e) 
+				{
+					System.err.println("Error in retreiving session key: ");
+					e.printStackTrace();
+					return false;
+				}		
+			} 
+			else 
+			{
+				System.err.println("Invalid server response");
+				return false;
+			}
+
+			try
+			{
+				Envelope idenEnv = new Envelope("IDENTITY");
+			    output.writeObject(idenEnv.encrypted(AES_key));
+
+			    Envelope second_response = (Envelope)input.readObject();
+				byte[] msg_combined_encrypted = convertToBytes((SealedObject)second_response.getObjContents().get(0));
+				//retrieve identity key
+				Envelope key_env = (Envelope)((SealedObject)(second_response.getObjContents().get(2))).getObject(AES_key);
+				identity_key = (Key)key_env.getObjContents().get(0);
+				Mac mac = Mac.getInstance("HmacSHA256", "BC");
+				mac.init(identity_key);
+				//verify hmac
+				byte[] rawHamc = mac.doFinal(msg_combined_encrypted);
+				byte[] Hmac_passed = (byte[])second_response.getObjContents().get(1);
+				if(Arrays.equals(rawHamc, Hmac_passed))
+				{
+					Envelope plaintext = (Envelope)((SealedObject)second_response.getObjContents().get(0)).getObject(AES_key);
+					t = (Integer)plaintext.getObjContents().get(0);
+					t++;
+					if((plaintext.getMessage()).equals("OK"))
+					{
+						return true;
+					}
+				}
+				else
+				{
+					System.err.println("Invalid server response FOR GETTING IDENTITY KEY");
+					return false;
+				}
+			}
+			catch (Exception e) 
+			{
+					System.err.println("Error in retreiving identity key: ");
+					e.printStackTrace();
+					return false;
+			}		
 			return false;
-	 	}
-	 	catch(Exception e)
+		}
+		catch(Exception e)
 		{
 			System.err.println("Error: " + e.getMessage());
 			e.printStackTrace(System.err);

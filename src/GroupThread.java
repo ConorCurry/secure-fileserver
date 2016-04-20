@@ -15,6 +15,7 @@ import javax.xml.bind.DatatypeConverter;
 import javax.crypto.spec.*;
 import java.nio.ByteBuffer;
 import java.security.spec.KeySpec;
+import java.math.BigInteger;
 
 public class GroupThread extends Thread 
 {
@@ -26,6 +27,7 @@ public class GroupThread extends Thread
 	private SecretKey AES_key;
 	private ObjectInputStream input;
 	private ObjectOutputStream output;
+	private int t; 
 	
 	public GroupThread(Socket _socket, GroupServer _gs)
 	{
@@ -46,7 +48,7 @@ public class GroupThread extends Thread
 
 		SecretKey AES_key = null;
 		identity_key = null;
-		int t = 0;
+	
 		try
 		{
 			//Announces connection and opens object streams
@@ -65,13 +67,8 @@ public class GroupThread extends Thread
 		    	//load group server's public key 
 				try
 				{
-					//read in server's public key from the file storing server's public key 
-		            FileInputStream kfisp = new FileInputStream("ServerPublic.bin");
-		            ObjectInputStream fileServerKeysStream = new ObjectInputStream(kfisp);
 		            rsp = new Envelope("OK");
-		            rsp.addObject(((ArrayList<PublicKey>)fileServerKeysStream.readObject()).get(0));
-		            kfisp.close();
-		            fileServerKeysStream.close();
+		            rsp.addObject(pubKey);
 		            authOrNot = false;
 				}
 				catch(Exception ex)
@@ -90,230 +87,81 @@ public class GroupThread extends Thread
 				if(!authOrNot)
 				{
 					first_message = (Envelope)input.readObject();
-				}
-
-				if(first_message.getMessage().equals("CHALLENGE"))
-				{
-						//get objects in the message 
-						ArrayList<Object> temp = first_message.getObjContents();
-						byte[] rndBytes = null;
-						//first username, second-encrypted number, third- encrypted AES key, forth signed AES key
-						if(temp != null && temp.size() == 4)
+					
+					if(first_message.getMessage().equals("AUTH"))
+					{
+						if((AES_key = authenticate(first_message)) == null) 
 						{
-							//decrypt the sealed object with server's private key 
-							Cipher dec = Cipher.getInstance(RSA_Method, "BC");
-							dec.init(Cipher.DECRYPT_MODE, privKey);
-							
-							String username = (String)temp.get(0);
-
-							//if user exists 
-							if(my_gs.userList.checkUser(username))
-							{
-								PublicKey usrPubKey = my_gs.userList.getUserPublicKey(username);
-							
-								Signature sig = Signature.getInstance("SHA256withRSA", "BC");
-								sig.initVerify(usrPubKey);
-						    	//update original data to be verified and verify the data
-						    	sig.update((byte[])temp.get(2));
-						    	byte[] to_be_verified = (byte[])temp.get(3);
-						    	boolean verified = sig.verify(to_be_verified);
-								
-								//if matches, decrypts to get the AES key, generate a new number and encrypt that with user's public key 
-						    	if(verified)
-						    	{
-										response_a = new Envelope("OK");
-
-										//Get the user generated number and add its hashed value to message 
-										Cipher rcipher = Cipher.getInstance(RSA_Method, "BC");
-										rcipher.init(Cipher.DECRYPT_MODE, privKey);
-							    		byte[] userGeneratedNumber = rcipher.doFinal((byte[])temp.get(1));
-							    		
-							    		MessageDigest messageDigest = MessageDigest.getInstance("SHA-256");
-										messageDigest.update(userGeneratedNumber);
-										byte[] hashedNumber = messageDigest.digest();
-							    		response_a.addObject(hashedNumber);
-										
-										//first decrypt to get the original byte data of the AES key 
-										Cipher AES_cipher = Cipher.getInstance(RSA_Method, "BC");
-										AES_cipher.init(Cipher.DECRYPT_MODE, privKey);
-										byte[] decrypted_keys = AES_cipher.doFinal((byte[])temp.get(2));
-
-										byte[] AES_array = new byte[32];
-										byte[] identity_array = new byte[32];
-										System.arraycopy(decrypted_keys, 0, AES_array, 0, 32);
-										System.arraycopy(decrypted_keys, 32, identity_array, 0, 32);
-										
-										//get the AES key transmitted 
-										AES_key = (SecretKey)new SecretKeySpec(AES_array, "AES");
-										//get the identity transmitted 
-										identity_key = (Key)new SecretKeySpec(identity_array, "HmacSHA256");
-
-										//randomly generate a new random number for verification, and encrypt it with the user's public key 
-										SecureRandom sr = new SecureRandom();
-										rndBytes = new byte[8];
-										sr.nextBytes(rndBytes);
-								 		Cipher cipher = Cipher.getInstance(RSA_Method, "BC");
-								 		cipher.init(Cipher.ENCRYPT_MODE, usrPubKey);
-								 		response_a.addObject(cipher.doFinal(rndBytes));
-								}
-								else
-								{
-									response_a = new Envelope("FAIL");
-								}
-							}
-							else
-							{  
-								System.out.println("The user does not exist");
-								response_a = new Envelope("FAIL");
-							}
+							socket.close();
+							proceed = false;
+							System.out.println("Auth failed, closing connection.");
 						}
-						else
-						{	
-							response_a = new Envelope("FAIL");
-							System.out.println("Wrong number of objects");
-						}
+					}
+					else if(first_message.getMessage().equals("CREATE-REQ")) 
+					{
+						System.out.print("beginning decryption...");
+					
+						ObjectInputStream reqsIn = new ObjectInputStream(new FileInputStream(userRequestsFile));
+						Hashtable<String, PublicKey> requests_pubKeys = (Hashtable<String, PublicKey>)reqsIn.readObject();
+						reqsIn.close();
 
-						output.writeObject(response_a);
+						ObjectOutputStream reqsOut = new ObjectOutputStream(new FileOutputStream(userRequestsFile));
+						byte[] encryptedReq = (byte[])first_message.getObjContents().get(0);
+						byte[] encReq1 = Arrays.copyOfRange(encryptedReq, 0, encryptedReq.length/2);
+						byte[] encReq2 = Arrays.copyOfRange(encryptedReq, encryptedReq.length/2, encryptedReq.length);
+						Envelope resp = new Envelope("FAIL");
+						//decrypt message
+						try {
+							Cipher ciph = Cipher.getInstance("RSA", "BC");
+							ciph.init(Cipher.DECRYPT_MODE, privKey);
+							byte[] plain1 = ciph.doFinal(encReq1);
+							byte[] plain2 = ciph.doFinal(encReq2);
+							byte[] plain = new byte[plain1.length + plain2.length];
+							System.arraycopy(plain1, 0, plain, 0, plain1.length);
+							System.arraycopy(plain2, 0, plain, plain1.length, plain2.length);
+							ByteArrayInputStream bIn = new ByteArrayInputStream(plain);
+							ObjectInputStream oIn = new ObjectInputStream(bIn);
+							ArrayList<byte[]> reqContents = (ArrayList<byte[]>)oIn.readObject();
+							String uname = new String(reqContents.get(0));
+							PublicKey uPubKey = KeyFactory.getInstance("RSA", "BC").generatePublic(new X509EncodedKeySpec(reqContents.get(1)));
+							requests_pubKeys.put(uname, uPubKey);
+							reqsOut.writeObject(requests_pubKeys);
+							reqsOut.close();
+							resp = new Envelope("OK");
+							System.out.println("done");
+						} catch(Exception e) {
+							System.err.println("Error in processing create user request:");
+							e.printStackTrace();
+						}
+						System.out.print("Sending response...");
+						output.reset();
+						output.writeObject(resp);
 						output.flush();
 						output.reset();
-
-						if(response_a.getMessage().equals("FAIL"))
-						{
-							try
-							{
-								
-								System.out.println("connection is closing from the server side");
-								socket.close();
-							}
-							catch (Exception en)
-							{
-								System.err.println("Error: " + en.getMessage());
-							}
-							proceed = false; //skip the loop
-						}	
-						else
-						{
-							Envelope second_message = (Envelope)input.readObject();
-							byte[] to_be_verified = (byte[])second_message.getObjContents().get(0); //get the hashed number decrypted by the user 
-							
-							Envelope response_v = null;
-							if(second_message.getMessage().equals("VERIFY"))
-							{
-									Cipher res_cipher = Cipher.getInstance("AES", "BC");
-									res_cipher.init(Cipher.ENCRYPT_MODE, AES_key);
-
-									
-									String response_message;
-									//hash the server generated data to see whether it's the same as the one received by the user 
-									MessageDigest messageDigest = MessageDigest.getInstance("SHA-256");
-									messageDigest.update(rndBytes);
-									byte[] hashedNumber = messageDigest.digest();
-
-									if(Arrays.equals(to_be_verified, hashedNumber))
-									{
-										response_message = "OK";
-									}
-									else
-									{
-										response_message = "FAIL";
-									}
-									//random generate a t for order-check
-									Random randomGenerator = new Random();
-									t = randomGenerator.nextInt(2147483647/2);
-
-									//encrypt the response by AES_key from now on
-									response_v = new Envelope(response_message);
-
-									Mac mac = Mac.getInstance("HmacSHA256", "BC");
-									mac.init(identity_key);
-
-									Envelope to_be_sent = new Envelope(response_message);
-									to_be_sent.addObject((Integer)t);
-									t++;//increase t to keep order 
-									
-									Cipher object_cipher = Cipher.getInstance("AES/CBC/PKCS5Padding", "BC");
-									object_cipher.init(Cipher.ENCRYPT_MODE, AES_key);
-									
-									SealedObject hmac_msg_sealed = new SealedObject(to_be_sent, object_cipher);
-									response_v.addObject(hmac_msg_sealed);
-									
-									byte[] rawHamc = mac.doFinal(convertToBytes(hmac_msg_sealed));
-									response_v.addObject(rawHamc); //add first object into array 
-							
-									output.writeObject(response_v);
-									output.flush();
-									output.reset();
-									if(response_message.equals("FAIL"))
-									{
-										try
-										{
-											System.out.println("connection is closing from the server side");
-											socket.close();
-										}
-										catch (Exception en)
-										{
-											System.err.println("Error: " + en.getMessage());
-										}
-										proceed = false; //skip the loop
-									}
-							}
-					}
-				}
-				else if(first_message.getMessage().equals("CREATE-REQ")) {
-					System.out.print("beginning decryption...");
-				
-					ObjectInputStream reqsIn = new ObjectInputStream(new FileInputStream(userRequestsFile));
-					Hashtable<String, PublicKey> requests_pubKeys = (Hashtable<String, PublicKey>)reqsIn.readObject();
-					reqsIn.close();
-
-					ObjectOutputStream reqsOut = new ObjectOutputStream(new FileOutputStream(userRequestsFile));
-					byte[] encryptedReq = (byte[])first_message.getObjContents().get(0);
-					byte[] encReq1 = Arrays.copyOfRange(encryptedReq, 0, encryptedReq.length/2);
-					byte[] encReq2 = Arrays.copyOfRange(encryptedReq, encryptedReq.length/2, encryptedReq.length);
-					Envelope resp = new Envelope("FAIL");
-					//decrypt message
-					try {
-						Cipher ciph = Cipher.getInstance("RSA", "BC");
-						ciph.init(Cipher.DECRYPT_MODE, privKey);
-						byte[] plain1 = ciph.doFinal(encReq1);
-						byte[] plain2 = ciph.doFinal(encReq2);
-						byte[] plain = new byte[plain1.length + plain2.length];
-						System.arraycopy(plain1, 0, plain, 0, plain1.length);
-						System.arraycopy(plain2, 0, plain, plain1.length, plain2.length);
-						ByteArrayInputStream bIn = new ByteArrayInputStream(plain);
-						ObjectInputStream oIn = new ObjectInputStream(bIn);
-						ArrayList<byte[]> reqContents = (ArrayList<byte[]>)oIn.readObject();
-						String uname = new String(reqContents.get(0));
-						PublicKey uPubKey = KeyFactory.getInstance("RSA", "BC").generatePublic(new X509EncodedKeySpec(reqContents.get(1)));
-						requests_pubKeys.put(uname, uPubKey);
-						reqsOut.writeObject(requests_pubKeys);
-						reqsOut.close();
-						resp = new Envelope("OK");
 						System.out.println("done");
-					} catch(Exception e) {
-						System.err.println("Error in processing create user request:");
-						e.printStackTrace();
-					}
-					System.out.print("Sending response...");
-					output.reset();
-					output.writeObject(resp);
-					output.flush();
-					output.reset();
-					System.out.println("done");
 
-					//close the connection when the create user request finished. 
-					System.out.println("connection is closing from the server side");
-					socket.close();	
-					proceed = false; //skip the loop
-				}
-				else
-				{
+						//close the connection when the create user request finished. 
+						System.out.println("connection is closing from the server side");
+						socket.close();	
+						proceed = false; //skip the loop
+					}
+					else
+					{
 						System.out.println("connection is closing from the server side");
 						socket.close();
 						proceed = false; //skip the loop
+					}
+				}
+				else
+				{
+					if((AES_key = authenticate(first_message)) == null) 
+					{
+							socket.close();
+							proceed = false;
+							System.out.println("Auth failed, closing connection.");
+					}
 				}
 			}
-
 			while(proceed)
 			{
 				Envelope message = (Envelope)input.readObject();
@@ -345,7 +193,9 @@ public class GroupThread extends Thread
 							System.out.println("The message is replayed/reordered!");
 							break;
 						}
-				} else {
+				} 
+				else 
+				{
 					System.out.println("HMAC could not be verified!");
 				}
 				System.out.println("Request received: " + instruction);
@@ -1467,6 +1317,149 @@ public class GroupThread extends Thread
 		{
 			return false; //user does not exist 
 		}
+	}
+
+	private SecretKey authenticate(Envelope challenge) {
+		SecretKey AESKey = null;
+		Cipher cipher = null;
+		PublicKey userKey = null;
+		byte[] rand;
+		KeyGenerator keyGen = null;
+		KeyFactory kf = null;
+		
+		if (challenge == null || !challenge.getMessage().equals("AUTH")) 
+		{
+			return null;
+		}
+			
+		//Stage1 -- handle receiving initial auth request
+		try 
+		{
+			cipher = Cipher.getInstance("RSA", "BC");
+			cipher.init(Cipher.DECRYPT_MODE, privKey);
+			ArrayList<Object> temp = challenge.getObjContents();
+			byte[] p_byte = cipher.doFinal((byte[])temp.get(0));
+			byte[] g_byte = cipher.doFinal((byte[])temp.get(1));
+			byte[] user_DHPub = (byte[])temp.get(2);
+			byte[] sigTobeVerify = (byte[])temp.get(3);
+			String username = (String)temp.get(4);
+			//retrieve user's public key 
+			
+			if(!my_gs.userList.checkUser(username))
+			{
+				System.out.println("Can't find user.");
+				return null;
+			}
+			userKey = my_gs.userList.getUserPublicKey(username);
+
+			//verify signature. 
+			Signature sig = Signature.getInstance("RSA", "BC");
+			sig.initVerify(userKey);
+	    	//update decrypted data to be verified and verify the data
+	    	sig.update(user_DHPub);
+	    	boolean verified1 = sig.verify(sigTobeVerify);
+
+	    	if(verified1)
+	    	{
+	    		
+		    	BigInteger p = new BigInteger(1, p_byte);
+		    	BigInteger g = new BigInteger(1, g_byte);
+		    	
+	    		//retrieve user's DH public key
+	    		kf = KeyFactory.getInstance("DH", "BC");
+				X509EncodedKeySpec x509Spec = new X509EncodedKeySpec(user_DHPub);
+           		PublicKey userDHPublicKey = kf.generatePublic(x509Spec);
+
+	    		//generate DH key pairs. 
+				KeyPairGenerator kpg = KeyPairGenerator.getInstance("DH", "BC");
+
+			    DHParameterSpec param = new DHParameterSpec(p, g);
+			    kpg.initialize(param);
+
+			    KeyPair kp = kpg.generateKeyPair();
+
+			    PrivateKey dhPrivate = kp.getPrivate();
+			    PublicKey dhPublic = kp.getPublic();
+
+			    KeyAgreement ka = KeyAgreement.getInstance("DH");
+			    ka.init(dhPrivate);
+			    ka.doPhase(userDHPublicKey, true);
+			    AESKey = ka.generateSecret("AES");
+
+			   	byte[] dhPublic_bytes = dhPublic.getEncoded();
+			    //we need to sign this value. 
+
+			    //generate signature
+				sig = Signature.getInstance("RSA", "BC");
+				sig.initSign(privKey, new SecureRandom());
+				//update encrypted data to be signed and sign the data 
+				sig.update(dhPublic_bytes);
+				byte[] sigBytes = sig.sign();
+
+				byte[] sigBytesHmac = sig.sign();
+				Envelope response = new Envelope("AUTH");
+				response.addObject(dhPublic_bytes);
+				response.addObject(sigBytes);
+				output.writeObject(response);
+	    	}
+			
+		} 
+		catch (Exception ex) 
+		{
+			System.err.println("Err in handling auth request part 1: ");
+			ex.printStackTrace();
+			return null;
+		}
+		
+		try
+		{
+			Envelope identity_request = (Envelope)((SealedObject)input.readObject()).getObject(AESKey);
+			if(identity_request != null && identity_request.getMessage().equals("IDENTITY"))
+			{
+				//generate a 256-bit key for identity check in HMAC 
+		        KeyGenerator key = KeyGenerator.getInstance("HmacSHA256", "BC");
+		        key.init(256, new SecureRandom());
+		        identity_key = key.generateKey();
+
+				Random randomGenerator = new Random();
+				t = randomGenerator.nextInt(2147483647/2);
+				//encrypt the response by AES_key from now on
+				Envelope response = new Envelope("OK");
+
+				Mac mac = Mac.getInstance("HmacSHA256", "BC");
+				mac.init(identity_key);
+
+				Envelope to_be_sent = new Envelope("OK");
+				to_be_sent.addObject((Integer)t);
+				t++;//increase t to keep order 
+									
+				SealedObject hmac_msg_sealed = to_be_sent.encrypted(AESKey);
+				response.addObject(hmac_msg_sealed);
+									
+				byte[] rawHamc = mac.doFinal(convertToBytes(hmac_msg_sealed));
+				response.addObject(rawHamc); //add first object into array 
+
+				Envelope key_env = new Envelope("INDENTITYKEY");
+				key_env.addObject(identity_key);
+				response.addObject(key_env.encrypted(AESKey));
+							
+				output.writeObject(response);
+				output.flush();
+				output.reset();
+			}
+			else
+			{
+				return null;
+			}
+		}
+		catch (Exception ex) 
+		{
+			System.err.println("Err in handling sending identity key: ");
+			ex.printStackTrace();
+			return null;
+		}
+		System.out.println("Authentication complete, success!");
+		return AESKey; //auth steps complete	
 	}
 
 	private byte[] convertToBytes(Object object){
