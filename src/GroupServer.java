@@ -13,6 +13,7 @@ import javax.crypto.*;
 import java.security.*;
 import javax.crypto.spec.*;
 import java.security.spec.KeySpec;
+import java.security.spec.PKCS8EncodedKeySpec;
 
 public class GroupServer extends Server {
 
@@ -20,6 +21,9 @@ public class GroupServer extends Server {
 	public UserList userList;
 	public GroupList groupList;
 	public String password;
+	public Key encrypt_key;
+	public PrivateKey privKey;
+	public PublicKey pubKey;
 
 	public GroupServer() {
 		super(SERVER_PORT, "ALPHA");
@@ -41,6 +45,7 @@ public class GroupServer extends Server {
 		//This runs a thread that saves the lists on program exit
 		Runtime runtime = Runtime.getRuntime();
 		runtime.addShutdownHook(new ShutDownListener(this));
+		Security.addProvider(new BouncyCastleProvider());
 
 		//Open user file to get user list
 		try
@@ -49,11 +54,52 @@ public class GroupServer extends Server {
 			FileInputStream gfis = new FileInputStream(groupFile);
 			userStream = new ObjectInputStream(ufis);
 			groupStream = new ObjectInputStream(gfis);
-			
-			userList = (UserList)userStream.readObject();
-			groupList = (GroupList)groupStream.readObject();
-			System.out.print("Please enter a password for the group server: ");
-			password = console.next();
+			byte[] u_bytes = (byte[])userStream.readObject();
+			byte[] g_bytes = (byte[])groupStream.readObject();
+			try
+			{
+				System.out.print("Please enter a password for the group server: ");
+				password = console.next();
+
+				//read in encrypted private key 
+				ObjectInputStream sPrivKInStream = new ObjectInputStream(new FileInputStream("ServerPrivate.bin"));    
+				ArrayList<byte[]> server_priv_byte = (ArrayList<byte[]>)sPrivKInStream.readObject();
+				sPrivKInStream.close();
+
+				byte[] key_data = server_priv_byte.get(0);
+				byte[] salt = server_priv_byte.get(1);
+
+				SecretKeyFactory f = SecretKeyFactory.getInstance("PBKDF2WithHmacSHA1", "BC");
+				KeySpec ks = new PBEKeySpec((password).toCharArray(), salt, 1024, 256);
+				SecretKey s = f.generateSecret(ks);
+				encrypt_key = new SecretKeySpec(s.getEncoded(), "AES");
+				
+				//decrypt the one read from the file to get the server's private key 
+				Cipher cipher_privKey = Cipher.getInstance("AES", "BC");
+				cipher_privKey.init(Cipher.DECRYPT_MODE, encrypt_key);
+				byte[] decrypted_data = cipher_privKey.doFinal(key_data);
+				
+				//recover the private key from the decrypted byte array 
+				KeyFactory kf = KeyFactory.getInstance("RSA", "BC");
+				privKey = kf.generatePrivate(new PKCS8EncodedKeySpec(decrypted_data));
+			        
+			    //read in server's public key
+			    ObjectInputStream sPubKInStream = new ObjectInputStream(new FileInputStream("ServerPublic.bin"));    
+				pubKey = ((ArrayList<PublicKey>)sPubKInStream.readObject()).get(0);
+				sPubKInStream.close();
+
+				Cipher cipher_list = Cipher.getInstance("AES", "BC");
+				cipher_list.init(Cipher.DECRYPT_MODE, encrypt_key);
+				userList = (UserList)convertObject(cipher_list.doFinal(u_bytes));
+				
+				cipher_list = Cipher.getInstance("AES", "BC");
+				cipher_list.init(Cipher.DECRYPT_MODE, encrypt_key);
+				groupList = (GroupList)convertObject(cipher_list.doFinal(g_bytes));
+			}
+			catch(Exception ex)
+			{
+				System.out.println(ex.toString());
+			}
 		}
 		catch(FileNotFoundException e)
 		{
@@ -67,9 +113,7 @@ public class GroupServer extends Server {
 			password = console.next();
 
 			try
-			{
-				Security.addProvider(new BouncyCastleProvider());
-				
+			{			
 				//generate empty hashtable for storing users requesting accounts
 				Hashtable<String, PublicKey> requests_pubKeys = new Hashtable<String, PublicKey>();
 				ObjectOutputStream reqsOut = new ObjectOutputStream(new FileOutputStream(userRequestsFile));
@@ -125,11 +169,13 @@ public class GroupServer extends Server {
 	            KeyPair kpn = kpgn.genKeyPair();
 
 	            ArrayList<PublicKey> server_pub = new ArrayList<PublicKey>();
-	            server_pub.add(kpn.getPublic());
+	            pubKey = kpn.getPublic();
+	            server_pub.add(pubKey);
 	            //write server's public key to a file 
 	            ObjectOutputStream sPubKOutStream = new ObjectOutputStream(new FileOutputStream("ServerPublic.bin"));
 	            sPubKOutStream.writeObject(server_pub);
 	            sPubKOutStream.close();
+
 			
 				//generate salt for the server 
 				byte[] server_salt = new byte[16];
@@ -140,10 +186,11 @@ public class GroupServer extends Server {
 				KeySpec ks = new PBEKeySpec(password.toCharArray(), server_salt, 1024, 256);
 				SecretKey s = f.generateSecret(ks);
 				Key generated_skey2 = new SecretKeySpec(s.getEncoded(), "AES");
+				encrypt_key = generated_skey2;
 
 				scipher.init(Cipher.ENCRYPT_MODE, generated_skey2);
-				
-				byte[] key_data2 = (kpn.getPrivate()).getEncoded();
+				privKey = kpn.getPrivate();
+				byte[] key_data2 = privKey.getEncoded();
 				byte[] encrypted_data2 = scipher.doFinal(key_data2);
 				
 				ArrayList<byte[]> server_priv_salt = new ArrayList<byte[]>();
@@ -158,17 +205,12 @@ public class GroupServer extends Server {
 				KeyGenerator ed_key = KeyGenerator.getInstance("AES", "BC");
 				ed_key.init(256, new SecureRandom()); //128-bit AES key
 				SecretKey file_key = ed_key.generateKey();
-
-				Cipher cipher = Cipher.getInstance("AES", "BC");
-				cipher.init(Cipher.ENCRYPT_MODE, generated_skey2);
-
-				byte[] encrypted_file_key = cipher.doFinal(file_key.getEncoded());
 		
 				//Create a new list, add current user to the ADMIN group. They now own the ADMIN group.
 				userList = new UserList();
 				groupList = new GroupList();
 				userList.addUser(username, kp.getPublic());
-				groupList.addGroup("ADMIN", username, encrypted_file_key);
+				groupList.addGroup("ADMIN", username, file_key);
 	            groupList.addMember(username, "ADMIN");
 				userList.addGroup(username, "ADMIN");
 				userList.addOwnership(username, "ADMIN");
@@ -219,6 +261,39 @@ public class GroupServer extends Server {
 			e.printStackTrace(System.err);
 		}
 	}
+	private byte[] convertToBytes(Object object){
+ 		try{ 
+    	   	ByteArrayOutputStream bos = new ByteArrayOutputStream();
+         	ObjectOutput out = new ObjectOutputStream(bos);
+        	out.writeObject(object);
+        	bos.close();
+        	out.close();
+        	return bos.toByteArray();
+    	} 
+    	catch (Exception byte_exception)
+    	{
+    		System.out.println("Can't convert object to a byte array");
+    		return null;
+    	}
+	}
+
+	private Object convertObject(byte[] data)
+	{
+   	 	try
+   	 	{
+	   	 	ByteArrayInputStream in = new ByteArrayInputStream(data);
+	    	ObjectInputStream is = new ObjectInputStream(in);
+	    	Object converted = is.readObject();
+	    	is.close();
+	    	in.close();
+	    	return converted;
+	    }
+	    catch(Exception e)
+	    {
+	    	System.out.println("Can't convert byte to object!");
+	    	return null;
+	    }
+	}
 }
 
 //This thread saves the user list
@@ -240,14 +315,33 @@ class ShutDownListener extends Thread
 		{
 			uOutStream = new ObjectOutputStream(new FileOutputStream("UserList.bin"));
 			gOutStream = new ObjectOutputStream(new FileOutputStream("GroupList.bin"));
-			uOutStream.writeObject(my_gs.userList);
-			gOutStream.writeObject(my_gs.groupList);
+			Cipher cipher_list = Cipher.getInstance("AES", "BC");
+			cipher_list.init(Cipher.ENCRYPT_MODE, my_gs.encrypt_key);
+			uOutStream.writeObject(cipher_list.doFinal(convertToBytes(my_gs.userList)));
+			cipher_list.init(Cipher.ENCRYPT_MODE, my_gs.encrypt_key);
+			gOutStream.writeObject(cipher_list.doFinal(convertToBytes(my_gs.groupList)));
 		}
 		catch(Exception e)
 		{
 			System.err.println("Error: " + e.getMessage());
 			e.printStackTrace(System.err);
 		}
+	}
+
+	private byte[] convertToBytes(Object object){
+ 		try{ 
+    	   	ByteArrayOutputStream bos = new ByteArrayOutputStream();
+         	ObjectOutput out = new ObjectOutputStream(bos);
+        	out.writeObject(object);
+        	bos.close();
+        	out.close();
+        	return bos.toByteArray();
+    	} 
+    	catch (Exception byte_exception)
+    	{
+    		System.out.println("Can't convert object to a byte array");
+    		return null;
+    	}
 	}
 }
 
@@ -274,8 +368,11 @@ class AutoSave extends Thread
 				{
 					uOutStream = new ObjectOutputStream(new FileOutputStream("UserList.bin"));
 					gOutStream = new ObjectOutputStream(new FileOutputStream("GroupList.bin"));
-					uOutStream.writeObject(my_gs.userList);
-					gOutStream.writeObject(my_gs.groupList);
+					Cipher cipher_list = Cipher.getInstance("AES", "BC");
+					cipher_list.init(Cipher.ENCRYPT_MODE, my_gs.encrypt_key);
+					uOutStream.writeObject(cipher_list.doFinal(convertToBytes(my_gs.userList)));
+					cipher_list.init(Cipher.ENCRYPT_MODE, my_gs.encrypt_key);
+					gOutStream.writeObject(cipher_list.doFinal(convertToBytes(my_gs.groupList)));
 				}
 				catch(Exception e)
 				{
@@ -289,5 +386,21 @@ class AutoSave extends Thread
 				System.out.println("Autosave Interrupted");
 			}
 		} while(true);
+	}
+
+	private byte[] convertToBytes(Object object){
+ 		try{ 
+    	   	ByteArrayOutputStream bos = new ByteArrayOutputStream();
+         	ObjectOutput out = new ObjectOutputStream(bos);
+        	out.writeObject(object);
+        	bos.close();
+        	out.close();
+        	return bos.toByteArray();
+    	} 
+    	catch (Exception byte_exception)
+    	{
+    		System.out.println("Can't convert object to a byte array");
+    		return null;
+    	}
 	}
 }

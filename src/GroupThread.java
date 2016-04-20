@@ -26,7 +26,6 @@ public class GroupThread extends Thread
 	private SecretKey AES_key;
 	private ObjectInputStream input;
 	private ObjectOutputStream output;
-	private Key encrypt_key;
 	
 	public GroupThread(Socket _socket, GroupServer _gs)
 	{
@@ -42,50 +41,9 @@ public class GroupThread extends Thread
 		String AES_Method = "AES/CBC/PKCS5Padding";
 		String userRequestsFile = "UserRequests.bin";
 		
-		//read the server's public key in and private key in 
-		try
-		{
-			//read in encrypted private key 
-			ObjectInputStream sPrivKInStream = new ObjectInputStream(new FileInputStream("ServerPrivate.bin"));    
-			ArrayList<byte[]> server_priv_byte = (ArrayList<byte[]>)sPrivKInStream.readObject();
-			sPrivKInStream.close();
+		privKey = my_gs.privKey;
+		pubKey = my_gs.pubKey;
 
-			byte[] key_data = server_priv_byte.get(0);
-			byte[] salt = server_priv_byte.get(1);
-
-			SecretKeyFactory f = SecretKeyFactory.getInstance("PBKDF2WithHmacSHA1", "BC");
-			KeySpec ks = new PBEKeySpec((my_gs.password).toCharArray(), salt, 1024, 256);
-			SecretKey s = f.generateSecret(ks);
-			encrypt_key = new SecretKeySpec(s.getEncoded(), "AES");
-			
-			//decrypt the one read from the file to get the server's private key 
-			Cipher cipher_privKey = Cipher.getInstance("AES", "BC");
-			cipher_privKey.init(Cipher.DECRYPT_MODE, encrypt_key);
-			byte[] decrypted_data = cipher_privKey.doFinal(key_data);
-			
-			//recover the private key from the decrypted byte array 
-			KeyFactory kf = KeyFactory.getInstance("RSA", "BC");
-			privKey = kf.generatePrivate(new PKCS8EncodedKeySpec(decrypted_data));
-		        
-		    //read in server's public key
-		    ObjectInputStream sPubKInStream = new ObjectInputStream(new FileInputStream("ServerPublic.bin"));    
-			pubKey = ((ArrayList<PublicKey>)sPubKInStream.readObject()).get(0);
-			sPubKInStream.close();
-		}
-		catch (Exception e)
-		{
-			//fail to get the server's key pairs, exiting.....
-			try
-			{
-				System.out.println("connection is closing from the server side");
-				socket.close();
-			}
-			catch (Exception en)
-			{
-				System.err.println("Error: " + en.getMessage());
-			}
-			proceed = false; //skip the loop
-		}
 		SecretKey AES_key = null;
 		identity_key = null;
 		int t = 0;
@@ -890,19 +848,11 @@ public class GroupThread extends Thread
 					}
 					else
 					{
-						ArrayList<SecretKey> file_keys = new ArrayList<SecretKey>();
 						if(my_gs.groupList.checkGroup(subset.get(0)))
 						{
 							if(my_gs.groupList.getFileKeys(subset.get(0)) != null)
 							{
-								ArrayList<byte[]> encrypted_file_keys = new ArrayList<byte[]>(my_gs.groupList.getFileKeys(subset.get(0)));
-								for(byte[] eFk : encrypted_file_keys)
-								{
-									Cipher deCipher = Cipher.getInstance("AES", "BC");
-									deCipher.init(Cipher.DECRYPT_MODE, encrypt_key);
-									byte[] deKey = deCipher.doFinal(eFk);
-									file_keys.add((SecretKey)new SecretKeySpec(deKey, "AES"));
-								}
+								ArrayList<SecretKey> file_keys = new ArrayList<SecretKey>(my_gs.groupList.getFileKeys(subset.get(0)));
 								UserToken yourToken = createToken(username, subset, file_keys); //Create a token
 								yourToken.tokSign(privKey); //sign the token for the file server authentication purpose
 								
@@ -1262,11 +1212,7 @@ public class GroupThread extends Thread
 							//generate a 128 key for new group 
 							SecretKey file_key = key.generateKey();
 
-							Cipher cipher = Cipher.getInstance("AES", "BC");
-							cipher.init(Cipher.ENCRYPT_MODE, encrypt_key);
-
-							byte[] encrypted_file_key = cipher.doFinal(file_key.getEncoded());
-							my_gs.groupList.removeMember(username, deleteFromGroups.get(index), encrypted_file_key);
+							my_gs.groupList.removeMember(username, deleteFromGroups.get(index), file_key);
 						}
 						catch(Exception e)
 						{
@@ -1328,18 +1274,14 @@ public class GroupThread extends Thread
 				key.init(256, new SecureRandom()); //128-bit AES key
 				//generate a 128 key for new group 
 				SecretKey file_key = key.generateKey();
-
-				Cipher cipher = Cipher.getInstance("AES", "BC");
-				cipher.init(Cipher.ENCRYPT_MODE, encrypt_key);
-
-				byte[] encrypted_file_key = cipher.doFinal(file_key.getEncoded()); //128-bit AES key
+				//128-bit AES key
 		
 				//Does user already exist?
 				if(my_gs.groupList.checkGroup(groupname))
 				{
 					return false; //Group already exists
 				}
-				else if(my_gs.groupList.addGroup(groupname, requester, encrypted_file_key)) //if group is successfully added
+				else if(my_gs.groupList.addGroup(groupname, requester, file_key)) //if group is successfully added
 				{
 				    //this method handles group creation with an owner
 				    //also put the user as a group member
@@ -1496,11 +1438,7 @@ public class GroupThread extends Thread
 							//generate a 128 key for new group 
 							SecretKey file_key = key.generateKey();
 
-							Cipher cipher = Cipher.getInstance("AES", "BC");
-							cipher.init(Cipher.ENCRYPT_MODE, encrypt_key);
-
-							byte[] encrypted_file_key = cipher.doFinal(file_key.getEncoded());
-							my_gs.groupList.removeMember(user, group, encrypted_file_key);
+							my_gs.groupList.removeMember(user, group, file_key);
 							my_gs.userList.removeGroup(user, group);
 		                  	return true; //remove this successfully
 						}
