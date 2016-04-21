@@ -37,8 +37,8 @@ countermeasures.</p>
       <h2>Threat Model: Information Leakage/ modification from Servers’ and Users’ disks</h2>
 <!-- BEGIN CHANGES HERE -->
 
-<h3>Description:</h3> 
-<p>Even though group server is mostly trusted in the system, but all the information stored on group server is unencrypted as plain text files, which is very vulnerable.  Attackers are assumed to be able to steal those information files from the disk of group server. Also, users and servers store their private keys locally, which is encrypted by a key derived from the password they set up with SHA-256. Because of the fast speed of hardwares, attackers can break SHA-256 keys brute-forcedly using dictionary and rainbow tables within reasonable time and steal/modify the private keys once the file is decrypted. Thus, a secure encryption should be added to files stored on the group server’s and users’ disks to ensure the confidentiality of those important information.</p>
+<p>Description:</p> 
+<p>Even though the group server is entirely trustworthy for operations, all the information on the group server is stored as plain text files on disks, vulnerable to be leaked. Also, users and servers store their private keys locally, encrypted by a key derived from their passwords and SHA-256. Attackers are assumed to be able to obtain a copy of disk image from users’ and servers’ computers, and thus have access to files stored on the disk. That is, the attacker can obtain a backup of disks, and no virtual memory information and no real-time running data are included. Attackers can view or break the file “offline” once they obtain such a copy. Thus, all the information about the state of group server would be leaked. What’s more, because of the fast speed of hardware nowadays, attackers can break SHA-256 keys brute-forcedly using dictionary and rainbow tables within a reasonable time and thus get the private key encrypted with it. In order to solve the problems addressed, a secure encryption method should be added to files stored on servers’ and users’ disks to ensure the confidentiality of those important information.</p>
 
 <!-- END CHANGES HERE -->
     </section>
@@ -46,15 +46,13 @@ countermeasures.</p>
       <h2>Attacks</h2>
 <!-- BEGIN CHANGES HERE -->
 
-<h3>For Group Server:</h3>
-<p>The adversary can add any person into one group by modifying UserList file and GroupList file, which will give the malicious user permission to read/write files only shared within those groups. Also, the adversary can remove any person from groups to disenable them from accessing files.</p>
+<p>For Group Server:</p>
+<p>Once the adversary has access to groupList and userList, the adversary can have all the states of users and groups on the group server. They will know the members of all groups and also can get list of files keys stored on GroupList. The leakage of the information about group membership will lead attackers to attack a specific person’s account to modify the group information they are interested in. The leakage of file keys can lead to the unauthorized access to files that should only be accessed by members in a certain group. The adversary can read files with the stolen key lists and the secret inside the file is leaked. 
+</p>
 
-<p>The adversary can get list of files keys by compromising the plaintext storing that information. The leakage of file keys can lead to the unauthorized access to files that should only be accessed to members in a certain group. The adversary can read and modify files with the stolen key lists because file servers are untrusted and can leak files encrypted by keys in the lists. The adversary can even modify the key list to mess up users that they can’t decrypt the files appropriately with wrong keys. </p>
-
-<p>The adversary can even change public keys stored in the UserList to mess up the authentication process between the user and the group server. </p>
-
-<h3>For stored private keys:</h3>
-<p>The adversary can steal encrypted private keys (with SHA-256) stored in disk and break that file to get the private key. This threat leads to the private keys being compromised. The authentication is done by RSA key pairs. Once the private key is compromised, the exchanged shared key is revealed, and all the conversation will be presented to the adversary.</p>
+<p>For stored private keys:</p>
+<p>The adversary can steal private keys encrypted with SHA-256 and stored on the disk. The adversary can break that encrypted file offline to get the private key. This threat leads to the private keys being compromised. The authentication is done by RSA key pairs. Once the private key is compromised, the exchanged shared key is revealed, and all the conversation will be presented to the adversary if the adversary records the communication between clients and servers. The adversary can even use the stolen private key to pretend them as a user/server.  
+</p>
 
 <!-- END CHANGES HERE -->
     </section>
@@ -62,42 +60,25 @@ countermeasures.</p>
       <h2>Countermeasures</h2>
 <!-- BEGIN CHANGES HERE -->
 
-<p>Instead of using keys derived from passwords with SHA-256 to encrypt private keys, the new algorithm, PBKDF2WithHmacSHA1, is used to derive keys from passwords. The iteration number of this algorithm makes it slow to break by design, to make the attack hard to achieve. 
-With those keys, users and servers can store their private keys safely to reduce the possibility that private keys are compromised. Those keys can also use to encrypt important files on the servers, for example, the GroupList and UserList on the group server. The adversary could not access information encrypted in the files because of the difficulty of attacking, which prevents information being modified/leaked, like group information, file key lists, etc. 
-</p>
+<p>Instead of using keys derived from passwords with SHA-256 to encrypt private keys, the new algorithm, PBKDF2WithHmacSHA1, is used to derive keys from passwords. The iteration number of this algorithm makes it slow to break by design, making the attack hard to achieve.</p>
+
+<p>With those keys, users and servers can store their private keys safely to reduce the possibility that private keys are compromised. Those keys can also use to encrypt important files, the GroupList and UserList, on the group server. The adversary could not access information in the encrypted files because they can't break the key dedrived by PBKDF2WithHmacSHA1, and thus, information stored in the encrypted files can't be leaked.</p>
     </section>
+
     <section id="threatmodel">
       <h2>Threat Model: Forward Secrecy Broken</h2>
-<h3>Description:</h3> 
-<p>In previous threat models, the possibility for a private key being compromised is brought up. The adversary may record all the information starting from the authentication process and break all the messages exchanged. The forward secrecy was broken in this case.</p>
+<p>Description:</p> 
+<p>In the previous threat model, the possibility for a private key being compromised is brought up. With a compromised private key, the adversary can record all the information starting from the authentication process and break all the messages exchanged. The forward secrecy was broken in this case.</p>
 
 </section>
     <section id="attack">
       <h2>Attacks</h2>
-<p>The adversary compromises the private key first and records all the messages exchanged between the innocent user and server. Then the adversary will use the private key to get the key exchanged between them, and decrypts all the messages. That decryption of message no only reveals all the information exchanged, it also reveals the list of keys being transmitted to the user if the user requests such a list from group server.  Some files are encrypted with keys with in the list, and the adversary can use that list of file keys to decrypt those files stolen from file servers (they are untrusted). </p>
+<p>The adversary compromises the private key first and records all the messages exchanged between the innocent user and server. Then the adversary will use the private key to get the key exchanged between them, and decrypts all the messages. That decryption of message no only reveals all the information exchanged, it also reveals the list of keys being transmitted to the user if the user requests such a list from group server. Files shared in groups are encrypted with keys with in the list, and the adversary can use that list of file keys to decrypt those files stolen from file servers (they are untrusted).</p>
 
 </section>
     <section id="countermeasure">
       <h2>Countermeasures</h2>
-<p>Signed Diffie-Hellman will be used through the authentication and key exchanges. (Implemented)</p>
-
-</section>
-    <section id="threatmodel">
-      <h2>Threat Model: DoS Attack</h2>
-<h3> Description:</h3>
-<p>A denial-of-service (DoS) attack can be an attmpt to make a machine unavailable to intended users. Even though the number of threads and the storage of disk are enough for legitimate uses, the adversary can make requests to consume the server’s resources and prevent real users from using those resources. </p>
-
-</section>
-    <section id="attack">
-      <h2>Attacks</h2>
-<p>The adversary may develop a driver to send requests only. For example, the adversary can write a program to send authentication/operation request only and never responds to the server’s reply. Because the server uses threads to communicate with different clients and a computer can support only a limited number of threads (the number may vary from computer to computer). If an adversary run such a driver multiple times until the number of threads are consumed completely on the server, no more client can connect to the server.  </p>
-<p>The adversary can also consume the disk of the file server by keeping uploading huge files. Once the storage of a file server is filled up, no more files can be uploaded by legitimate users.</p>
-</section>
-    <section id="countermeasure">
-      <h2>Countermeasures</h2>
-<p>The server can close the connection with a client automatically if the client does not respond in 5 minutes. This number is reasonable because that the operations are simple enough for users to perform. If they fail to response to the interactions, they have to re-log in.</p>
-
-<p>The server can assign file quota to the groups.</p>
+<p>Signed Diffie-Hellman protocol can be used through the authentication and key exchanges. Signed Diffie-Hellman protocol is secure because the two sides do not exchange the shared key directly. The client would generate prime BigIntegers p and g, and generate a public Diffie-Hellman key randomly from those numbers(equivalent to g^a mod p in theory). The client would sign the D-H public key, to show the identity, and then pass p and g, and the D-H public key to the server. The server would verify the identity, use the same pair p and g to generate server's D-H keypairs, and derieve a AES key by agreeing on his generated D-H private key and the client's D-H public key (equivalent to (g^a mod p)^b = g^ab mod p). The server will sign his D-H public key(equivalent to g^a mod p in theory), send that to the client, and the client can verify the server's identity by signature and derive the same AES key by agreeing on the server's D-H public key (equivalent to (g^b mod p)^a = g^ab mod p). After this, the server and client can exchange the identity key for hmac and the nonce for message repaly/reordering. Through this procedure, a secret key is shared with out transmitting a real key. The randomness generated by both sides, different p and g each time, and the difficulty of solving the discrete logarithm ensures the security of that shared key. The RSA keypairs are only used to verify the signature in this protocol. Even though the adversary records all the communciation and have the compromised private key, the adversary still can't break the shared secret key, and thus the perfect forward secrecy is provided.</p>
 
 <section id="threatmodel">
   <h2>Threat Model: Compromised User Keys</h2>
