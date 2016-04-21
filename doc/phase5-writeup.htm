@@ -28,7 +28,7 @@ Yijia Cui yic66@pitt.edu, Conor Curry clc231@pitt.edu
       <h2>Overview</h2>
 <!-- BEGIN CHANGES HERE -->
 
-<p>In this phase, threats are built against our assumptions for previous phase: the information stored on the disks can not be leaked, and the private key can't be compromised.</p>
+<p>In this phase, we introduce new threats to contrast our assumptions from previous phases. We now attempt to prevent cryptographic information leaking from Group Server disks by encrypting groups' AES keys that must be stored. We also modify our authentication protocols to include a signed Diffie Hellman key exhange in pursuit of forward secrecy. Finally, we address the possibility of compromised user keys -- involving the process of associating multiple keys with a user account, and two methods for providing a secure privilege escalation policy in case of account compromise.</p>
 
 <!-- END CHANGES HERE -->
     </section>
