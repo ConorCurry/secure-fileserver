@@ -1,6 +1,6 @@
 Once inside src/ folder,
 
-COMPILE: javac -cp .:/{Whatever path before tha}/cs1653-project-clc231-yic66/src/bcprov-jdk15on-154.jar *.java
+COMPILE: javac -cp .:/{Whatever path before that}/cs1653-project-clc231-yic66/resources/bcprov-jdk15on-154.jar *.java
 
 
 
